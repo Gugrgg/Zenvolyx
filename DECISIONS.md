@@ -64,7 +64,7 @@ Decisão: Não adotar um CRM padrão. Integrar com o que o cliente usa; para que
 Consequências: A integração com CRM precisa ser plugável: cada CRM novo vira um conector novo, não um fluxo novo.
 
 ## D009 Stack do código: Node.js 24 LTS com TypeScript
-Data: 2026-09-23 | Status: Proposta (aguarda confirmação do dono) | Tarefa: T002
+Data: 2026-09-23 | Status: Aceita (confirmada pelo dono na T004) | Tarefa: T002
 Contexto: `services/`, `integrations/` e `scripts/` precisam de uma stack única, próxima do n8n (D006) e simples de manter.
 Decisão: Node.js 24 LTS + TypeScript `strict`, pacote único na raiz com npm. O TS roda direto no Node, sem etapa de build (type stripping); `tsc --noEmit` só confere tipos. Testes com Vitest, lint e formatação com Biome, validação de payload externo com Zod, `.env` lido com `node --env-file`. Framework HTTP só quando surgir o primeiro endpoint. O n8n segue a D006.
 Consequências: Mesma linguagem dos Code nodes do n8n e poucas dependências (typescript, vitest, biome, zod). Comandos-alvo da T004: `npm test`, `npm run lint`, `npm run typecheck`. Sem enums/namespaces do TS, incompatíveis com type stripping.

@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T004 Configurar testes e lint; preencher os comandos na seção 1 do AGENTS.md
-  Depende: T003 | Sugerido: CODEX
 - [ ] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/
   Depende: T002 | Sugerido: CLAUDE
 - [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
@@ -34,6 +32,10 @@ _(vazio)_
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
 
+- [x] T004 Configurar testes e lint; preencher os comandos na seção 1 do AGENTS.md
+  Ref: DECISIONS.md (D009 aceita pelo dono), README.md (Desenvolvimento)
+  Validação: `npm ci`, `npm test` (1 teste), `npm run lint` e `npm run typecheck` passaram; verificações temporárias confirmaram que as ferramentas rejeitam asserção incorreta, `debugger` e erro de tipo.
+  Ambiente: Node.js 24.19.0; npm 12.1.0 temporário para validação, pois não estava disponível no PATH. Nenhuma instalação global alterada.
 - [x] T003 Criar estrutura de pastas da seção 3 do AGENTS.md com README curto em cada uma
   Ref: DECISIONS.md (D010)
   Validação: 9 pastas com READMEs de propósito, uso e validação; 5 links locais válidos; `git diff --cached --check` passou. Suíte automatizada pendente da T004.
@@ -58,15 +60,3 @@ Próxima tarefa: T032
 Observações:
 - ...
 -->
-
-### Handoff T002
-Concluído:
-- stack do código proposta em D009 (DECISIONS.md) e linha "Stack" da seção 1 do AGENTS.md preenchida
-Arquivos principais:
-- DECISIONS.md (D009)
-Próxima tarefa: T004
-Observações:
-- D009 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
-- O n8n não entra na T004: segue a D006 (local, Docker, configuração mais simples).
-- T004: `package.json` com scripts `test` (vitest run), `lint` (biome check), `typecheck` (tsc --noEmit); `"engines": {"node": ">=24"}`; tsconfig com `strict`, `noEmit`, `erasableSyntaxOnly`, `allowImportingTsExtensions`, `module`/`moduleResolution` `nodenext`.
-- Zod só entra quando surgir o primeiro payload externo; framework HTTP fica para o primeiro endpoint.

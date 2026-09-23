@@ -4,6 +4,30 @@ Agência de automação com IA para negócios de serviço que vendem pelo WhatsA
 com agendamento. Este repositório reúne as automações (n8n), as integrações (WhatsApp, CRM)
 e a configuração de cada cliente.
 
+## Desenvolvimento
+
+Pré-requisitos: Node.js 24 LTS com npm. Na raiz do repositório, `npm ci` instala
+as versões registradas no `package-lock.json`.
+
+Depois da instalação, execute na raiz:
+
+| Comando | Verificação |
+|---------|-------------|
+| `npm test` | Executa os testes uma vez, sem modo de observação. |
+| `npm run lint` | Confere lint, formatação e imports com Biome, sem alterar arquivos. |
+| `npm run typecheck` | Confere os tipos com TypeScript, sem gerar JavaScript. |
+
+Para corrigir formatação e imports, use `npm exec -- biome check --write .` e
+revise as alterações. As três verificações acima devem passar antes de integrar mudanças.
+
+O código usa módulos ESM (`"type": "module"`) e pode executar arquivos `.ts`
+diretamente no Node, sem build. Use extensões `.ts` nos imports locais e
+`import type` para tipos; não use sintaxe que exija transformação, como enums.
+Essas restrições seguem o [suporte a TypeScript do Node.js](https://nodejs.org/docs/latest-v24.x/api/typescript.html).
+
+A suíte inicial verifica a execução de TypeScript no Node. Ainda não há serviços,
+conectores ou workflows implementados. O n8n é configurado separadamente, conforme D006.
+
 ## Trabalhando com agentes
 
 | Arquivo        | Papel                                                   |

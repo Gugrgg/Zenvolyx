@@ -14,9 +14,10 @@ Automatiza captação, qualificação, agendamento e encaminhamento de leads com
 e CRM, com uma estrutura reutilizável entre clientes.
 
 - Premissas: n8n self-hosted (D006), WhatsApp pela API oficial da Meta (D007), CRM definido por cliente (D008).
-- Stack: _proposta em D009, aguarda confirmação_ (Node.js 24 LTS + TypeScript, npm, Vitest, Biome, Zod)
-- Testes: _definir em T004_ <!-- ex.: `npm test` -->
-- Lint/format: _definir em T004_ <!-- ex.: `npm run lint` -->
+- Stack: Node.js 24 LTS + TypeScript, npm, Vitest e Biome (D009 aceita); Zod entra no primeiro payload externo.
+- Testes: `npm test` (Vitest).
+- Lint/format: `npm run lint` (Biome, sem alterar arquivos).
+- Tipos: `npm run typecheck` (TypeScript, sem gerar arquivos).
 
 ## 2. Início de sessão (economia de tokens)
 
@@ -43,6 +44,7 @@ Ler `DECISIONS.md` só quando a tarefa mexer em arquitetura, estrutura ou algo j
 .
 ├── AGENTS.md  CLAUDE.md  CODEX.md  TASKS.md  DECISIONS.md  README.md
 ├── .env.example     # nomes das variáveis, sem valores
+├── package.json  package-lock.json  tsconfig.json  biome.json
 ├── automations/     # workflows n8n exportados (JSON), uma pasta por automação
 ├── integrations/    # conectores reutilizáveis: WhatsApp, CRM etc.
 ├── services/        # APIs pequenas e webhooks
