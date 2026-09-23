@@ -166,6 +166,31 @@ As verificações do repositório continuam sendo `npm test`, `npm run lint` e
 Para testar Data tables nesta versão, usar o editor ou um webhook no servidor:
 o comando isolado `n8n execute` não inicializou esse módulo na validação da T012.
 
+## 7. Comandos da CLI do n8n
+
+Importam, exportam e publicam workflows sem abrir o editor. Rodar na raiz, com o n8n
+ligado. O `-e N8N_RUNNERS_BROKER_PORT=5690` evita conflito com o n8n em execução, que já
+usa a porta interna 5679; sem ele, o comando para com "port 5679 is already in use".
+Este exemplo lista os workflows da instância:
+
+```powershell
+docker compose --env-file .env -f infra/n8n/compose.yaml exec -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n list:workflow
+```
+
+Trocando `list:workflow` por:
+
+- `import:workflow --input=/tmp/<nome>.json`: importa mantendo o `id` do JSON e despublica.
+  Antes, copiar o arquivo com `docker compose --env-file .env -f infra/n8n/compose.yaml cp <arquivo> n8n:/tmp/<nome>.json`.
+- `publish:workflow --id=<id>`: publica. Sub-workflows precisam estar publicados para serem
+  chamados; depois de publicar pela CLI, reiniciar o n8n (seção 6) para valer no servidor.
+- `export:workflow --id=<id> --pretty --output=/tmp/<nome>.json`: exporta; trazer o arquivo
+  com `cp n8n:/tmp/<nome>.json <destino>` e limpá-lo conforme a D022 antes do commit.
+- `execute --id=<id> --rawOutput`: executa um workflow já importado; não aceita mais
+  arquivo e não inicializa Data tables.
+
+Não há comando para apagar workflow: workflows de teste ficam arquivados e são apagados
+pelo editor.
+
 ## Referências
 
 - [Release fixa do n8n](https://github.com/n8n-io/n8n/releases/tag/n8n%402.40.5) e [Data tables nessa versão](https://github.com/n8n-io/n8n/blob/n8n%402.40.5/packages/%40n8n/config/src/configs/data-table.config.ts).

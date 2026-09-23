@@ -1,0 +1,66 @@
+{
+  "id": "loadClientConfig",
+  "name": "Load client config",
+  "nodes": [
+    {
+      "id": "b7a6d1c0-0001-4c1e-9a10-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "b7a6d1c0-0002-4c1e-9a10-000000000002",
+      "name": "Read client configs",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [220, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "fileSelector": "/files/clients/*/config.json",
+        "options": {}
+      }
+    },
+    {
+      "id": "b7a6d1c0-0003-4c1e-9a10-000000000003",
+      "name": "Select client",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "jsCode": "const INPUT_NODE = 'When Executed by Another Workflow';\n\nfunction folderName(directory) {\n  return String(directory ?? '').split('/').filter(Boolean).pop() ?? '';\n}\n\nfunction parseConfig(entry) {\n  let config;\n  try {\n    config = JSON.parse(entry.text);\n  } catch {\n    return null;\n  }\n  return config !== null && typeof config === 'object' && config.id === entry.folder ? config : null;\n}\n\nfunction selectClient(entries, phoneNumberId) {\n  const invalidConfigs = [];\n  if (typeof phoneNumberId !== 'string' || phoneNumberId.trim() === '') {\n    return { found: false, reason: 'invalid_input', invalidConfigs };\n  }\n  const matches = [];\n  for (const entry of entries) {\n    if (entry.folder === '' || entry.folder.startsWith('_')) continue;\n    const config = parseConfig(entry);\n    if (config === null) {\n      invalidConfigs.push(entry.folder);\n    } else if (config.active === true && config.whatsapp?.phoneNumberId === phoneNumberId) {\n      matches.push(config);\n    }\n  }\n  if (matches.length === 1) {\n    return { found: true, config: matches[0], invalidConfigs };\n  }\n  if (matches.length > 1) {\n    return { found: false, reason: 'duplicate', clientIds: matches.map((config) => config.id), invalidConfigs };\n  }\n  return { found: false, reason: 'not_found', invalidConfigs };\n}\n\nconst phoneNumberId = $(INPUT_NODE).first().json.phoneNumberId;\nconst entries = [];\nfor (const [index, item] of $input.all().entries()) {\n  if (!item.binary?.data) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(index, 'data');\n  entries.push({ folder: folderName(item.binary.data.directory), text: buffer.toString('utf8') });\n}\n\nreturn [{ json: selectClient(entries, phoneNumberId) }];"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read client configs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read client configs": {
+      "main": [
+        [
+          {
+            "node": "Select client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}
