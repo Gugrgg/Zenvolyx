@@ -35,7 +35,8 @@ Regras da Meta conferidas em 2026-09 na documentação oficial (links no fim).
   lead trocar de número, o BSUID muda e a conversa recomeça.
 - Status: `failed` gera alerta sem dados pessoais; os demais são ignorados.
 - Texto e respostas de botão ou lista seguem para a conversa. Outros tipos (áudio, imagem,
-  localização) recebem a mensagem `handoff` e vão para a equipe, até a T011 decidir sobre áudio.
+  localização) recebem a mensagem `handoff` e vão para a equipe, até existir transcrição de áudio
+  (T026).
 
 A entrada entrega à conversa um evento por lead e por rajada. Outras fontes de lead geram o mesmo
 formato, com o próprio `channel` (valores fictícios):
@@ -89,8 +90,8 @@ são mais claras e custam menos (ver Custos).
 
 - Desde 2026-10-01, respostas dentro da janela também são cobradas por mensagem, na tabela de
   utilidade (D007). Juntar rajadas e evitar mensagens desnecessárias reduz o custo.
-- A Meta tem uma IA própria no WhatsApp (Meta Business Agent), cobrada por token desde 2026-08-01.
-  Avaliar na T011.
+- A Meta tem uma IA própria no WhatsApp (Meta Business Agent), cobrada por token desde 2026-08-01;
+  descartada por ora (D019, [ia.md](ia.md)).
 
 ## Limites da coexistência (avisar o cliente)
 
