@@ -8,6 +8,8 @@ Desenho técnico das automações, serviços e integrações.
   templates, custos e limites da coexistência (T007).
 - [IA](ia.md): o que a IA faz e não faz, provedor, modelo, custo, dados, áudio e
   avaliação (T011).
+- [Demo](demo.md): o que a demo mostra, roteiro da conversa, estado, preparação e
+  tarefas até a demo (T009).
 
 Como usar: consultar os documentos conforme a tarefa e registrar decisões
 no [DECISIONS.md](../../DECISIONS.md), sem duplicá-las aqui.

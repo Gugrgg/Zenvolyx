@@ -74,6 +74,11 @@
   "messages": {
     "welcome": "Olá! Você falou com a Clínica Exemplo. Vou fazer duas perguntas rápidas para te atender melhor.",
     "handoff": "Obrigado! Vou chamar alguém da nossa equipe para continuar com você.",
-    "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve."
+    "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve.",
+    "notQualified": "Obrigado pelas respostas! No momento, esse atendimento não está entre os que oferecemos. Se precisar, é só chamar.",
+    "chooseSlot": "Ótimo! Escolha um horário para a sua avaliação:",
+    "noSlots": "Não encontrei horários livres agora. Vou chamar alguém da equipe para combinar com você.",
+    "booked": "Pronto! Sua avaliação ficou para {slot}. Até lá!",
+    "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
   }
 }

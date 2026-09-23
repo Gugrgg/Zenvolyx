@@ -128,3 +128,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T011
 Contexto: O dono quer IA desde a demo. Ela precisa entender texto livre sem inventar horário, preço ou qualificação, e mensagens de lead são dados pessoais, às vezes de saúde (D013).
 Decisão: A IA interpreta a mensagem do lead diante da pergunta atual e responde dúvidas só com a base da config (`ai.knowledge`), sempre em saída estruturada validada; regras, horários e gravações continuam no fluxo. Provedor: API do Claude (Anthropic), pelo nó HTTP Request, com modelo inicial `claude-opus-5-5` em esforço baixo e cache de prompt. A IA recebe só nome do negócio, base, pergunta atual e mensagem: nada de telefone, nome, BSUID ou histórico.
 Consequências: Custo estimado de US$ 0,04 a 0,08 por lead (docs/arquitetura/ia.md); trocar para `claude-sonnet-5`, mais rápido e mais barato, é decisão do dono depois da avaliação (T025). Áudio segue para a equipe até existir transcrição (T026). Falha, recusa ou saída inválida da IA volta para a pergunta com botões e, se repetir, para a equipe.
+
+## D020 Estado da conversa por lead, apagado após 30 dias
+Data: 2026-09-23 | Status: Aceita | Tarefa: T009
+Contexto: A conversa guiada precisa lembrar a etapa, as respostas e os horários oferecidos entre uma mensagem e outra, e a D013 limita o que o n8n guarda.
+Decisão: Uma tabela interna do n8n guarda, por cliente e BSUID, só etapa, índice da pergunta atual, respostas às perguntas da config, falhas seguidas, horários oferecidos, pausa, recusa e data da última interação. Um fluxo agendado apaga as linhas sem interação há 30 dias. Texto livre do lead não entra na tabela.
+Consequências: Lead que volta depois de 30 dias recomeça a conversa. O histórico que importa ao cliente fica no CRM (D017).
