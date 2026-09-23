@@ -55,7 +55,7 @@ Formato (linhas de baixo são opcionais):
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
   Implementado: `infra/n8n/compose.yaml`, README passo a passo, `.env.example`, `.env` local não versionado e D021. n8n 2.40.5 e cloudflared 2026.9.1; Data tables confirmadas no código da versão.
   Validação: Compose 5.5.1 validou o arquivo, as variáveis obrigatórias, loopback, volume, montagem somente leitura, retenção e túnel opcional; `npm test` e `npm run typecheck` passaram; lint passou numa cópia LF. Lint local falha pelo CRLF já registrado na T014.
-  Pendente: instalar/iniciar Docker Desktop com WSL 2 (Docker ausente nesta máquina; `wsl --status` retorna 50), depois verificar saúde, login, persistência, leitura dos clientes e webhook pelo túnel conforme README. Não foi possível executar os containers nesta sessão.
+  Pendente: instalar/iniciar Docker Desktop, depois verificar saúde, login, persistência, leitura dos clientes e webhook pelo túnel conforme README. WSL já instalado pelo dono: `wsl --status` retorna 0, com versão padrão 2. Docker ainda não localizado nos programas instalados, caminhos padrão ou processos em execução.
   Bloqueio da instalação: após autorização do dono, a tentativa automatizada de baixar e instalar Docker Desktop foi rejeitada pela revisão de aprovação com `blocked by policy`, sem motivo detalhado; o comando não foi executado. Necessário concluir a instalação pelo Windows e retomar os testes.
 
 ## Concluído
@@ -143,7 +143,7 @@ Arquivos principais:
 - infra/n8n/README.md
 Próxima tarefa: T012 (concluir a validação do ambiente)
 Observações:
-- Docker Desktop não está instalado; `wsl --status` retorna 50. Containers, login, persistência e acesso pelo túnel não puderam ser testados. Instalar/iniciar Docker com WSL 2 e seguir os passos 3 a 6 do README antes de concluir a tarefa.
+- WSL instalado pelo dono e validado: `wsl --status` retorna 0, versão padrão 2. Docker Desktop ainda não foi localizado nos programas instalados, caminhos padrão ou processos; confirmar com o dono se usou outra pasta. Containers, login, persistência e túnel continuam sem teste. Após instalar/iniciar Docker, seguir os passos 3 a 6 do README antes de concluir a tarefa.
 - O dono autorizou instalar Docker/WSL, mas a revisão automática bloqueou o comando de download e instalação (`blocked by policy`, sem detalhes), antes de executá-lo. A instalação precisa ser concluída manualmente no Windows; não repetir a mesma ação por outra ferramenta para contornar o bloqueio.
 - Validação estática feita com Compose 5.5.1 independente do Docker Engine; `config --quiet` passou e `.env.example` vazio foi recusado. Testes e tipos passaram; lint passou na cópia LF (problema local de CRLF permanece na T014).
 - Data tables e endpoint de prontidão confirmados no código do n8n 2.40.5; tags das duas imagens existem no registry. Não foi iniciado nenhum túnel público.
