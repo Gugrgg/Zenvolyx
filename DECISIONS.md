@@ -110,3 +110,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T007
 Contexto: Todos os clientes chegam pelo mesmo webhook do app; desde 2026 o telefone do lead pode vir oculto (nomes de usuário); leads mandam mensagens em sequência; e a equipe do cliente responde pelo app.
 Decisão: Um webhook no n8n responde na hora, valida a assinatura, descarta repetidos e identifica o cliente (`phone_number_id`) e o lead (BSUID). Mensagens do mesmo lead são agrupadas após alguns segundos de silêncio. Mensagem da equipe pelo app (`smb_message_echoes`) ou chamada da equipe pausa a automação para aquele lead por 24 h.
 Consequências: O lead é identificado pelo BSUID em todo o sistema; o telefone é opcional e só vai para o CRM. Tipos que a automação não entende (áudio, imagem) vão para a equipe até a T011.
+
+## D017 CRM: um contrato de gravação e Google Sheets como padrão
+Data: 2026-09-23 | Status: Aceita | Tarefa: T008
+Contexto: A D008 pede CRM plugável, com Google Sheets ou CRM gratuito para quem não tem. Os fluxos precisam gravar o lead sem saber qual CRM o cliente usa.
+Decisão: O contrato do CRM tem uma ação, `upsertLead`, que grava o estado completo do lead no primeiro contato e a cada mudança de etapa, identificando-o pelo BSUID (ou pelo telefone, se o BSUID mudou). Um sub-workflow roteador escolhe o fornecedor pelo `crm.provider` da config. O primeiro fornecedor é o Google Sheets, numa planilha do cliente compartilhada com a conta de serviço da agência (D014). Outros CRMs entram como conector novo quando um cliente precisar; se exigirem token por cliente, a forma é decidida e testada nessa tarefa, sem token na config nem nos dados da execução.
+Consequências: Todo cliente tem `crm` na config; quem não tem CRM usa `google-sheets`. Gravação que falha não interrompe a conversa: gera alerta, e a próxima gravação leva o estado completo.

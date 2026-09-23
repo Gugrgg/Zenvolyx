@@ -6,7 +6,8 @@ nada de contatos pessoais, contrato ou preços.
 
 ## Conectores
 
-- CRM: _fornecedor e o que o cliente compartilhou com a agência_
+- CRM: _fornecedor e o que o cliente compartilhou com a agência (ex.: planilha `Leads`
+  compartilhada com a conta de serviço da agência)_
 - Agenda: _fornecedor e o que o cliente compartilhou com a agência_
 
 ## Ativação
