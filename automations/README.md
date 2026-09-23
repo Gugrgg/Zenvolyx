@@ -1,10 +1,14 @@
 # Automações
 
-Workflows n8n exportados em JSON, organizados em `automations/<nome>/`.
-Ainda não há workflows implementados.
+Workflows n8n exportados em JSON, organizados em `automations/<nome>/`, cada um com
+ID fixo e export limpo (D022).
 
-Como rodar: quando houver uma automação, seguir o README da sua pasta para
-importar e executar o workflow no n8n local (Docker, D006).
+- [load-client-config](load-client-config/README.md): acha o cliente ativo pelo número
+  de WhatsApp e devolve a config (T016).
+
+Como rodar: seguir o README da pasta para importar e publicar o workflow no n8n
+local (Docker, D006; [comandos da CLI](../infra/n8n/README.md#7-comandos-da-cli-do-n8n)).
+Sub-workflows só podem ser chamados depois de publicados.
 
 Como testar: cada automação deve documentar os passos de verificação e usar
 payloads fictícios em `tests/fixtures/`. Exportar o JSON após cada alteração,
