@@ -1,0 +1,16 @@
+# Secrets e configurações locais; manter apenas o modelo sem valores.
+.env
+.env.*
+!.env.example
+
+# Dependências, builds e relatórios gerados.
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs e arquivos temporários locais.
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini

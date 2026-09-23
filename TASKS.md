@@ -12,10 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T001 Inicializar Git com `main` e `dev`, `.gitignore` e `.env.example` vazio
-  Sugerido: CODEX
-- [ ] T002 Propor stack (linguagem, runtime, testes, lint) e registrar em DECISIONS.md
-  Sugerido: CLAUDE | Ref: DECISIONS.md (D006)
 - [ ] T003 Criar estrutura de pastas da seção 3 do AGENTS.md com README curto em cada uma
   Depende: T001, T002 | Sugerido: CODEX
 - [ ] T004 Configurar testes e lint; preencher os comandos na seção 1 do AGENTS.md
@@ -40,6 +36,11 @@ _(vazio)_
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
 
+- [x] T001 Inicializar Git com `main` e `dev`, `.gitignore` e `.env.example` vazio
+  Validação: 15 casos de ignore, `.env.example` vazio e `git diff --cached --check` passaram.
+  Remoto: `origin` configurado para `https://github.com/Gugrgg/Zenvolyx.git`; sem push, pois a consulta retornou `Repository not found`.
+- [x] T002 Propor stack (linguagem, runtime, testes, lint) e registrar em DECISIONS.md
+  Ref: DECISIONS.md (D009)
 - [x] T000 Criar estrutura de contexto (AGENTS, CLAUDE, CODEX, TASKS, DECISIONS, README)
 
 ## Handoffs
@@ -57,4 +58,14 @@ Observações:
 - ...
 -->
 
-_(nenhum)_
+### Handoff T002
+Concluído:
+- stack do código proposta em D009 (DECISIONS.md) e linha "Stack" da seção 1 do AGENTS.md preenchida
+Arquivos principais:
+- DECISIONS.md (D009)
+Próxima tarefa: T004
+Observações:
+- D009 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
+- O n8n não entra na T004: segue a D006 (local, Docker, configuração mais simples).
+- T004: `package.json` com scripts `test` (vitest run), `lint` (biome check), `typecheck` (tsc --noEmit); `"engines": {"node": ">=24"}`; tsconfig com `strict`, `noEmit`, `erasableSyntaxOnly`, `allowImportingTsExtensions`, `module`/`moduleResolution` `nodenext`.
+- Zod só entra quando surgir o primeiro payload externo; framework HTTP fica para o primeiro endpoint.

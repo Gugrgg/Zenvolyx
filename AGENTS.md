@@ -14,7 +14,7 @@ Automatiza captação, qualificação, agendamento e encaminhamento de leads com
 e CRM, com uma estrutura reutilizável entre clientes.
 
 - Premissas: n8n self-hosted (D006), WhatsApp pela API oficial da Meta (D007), CRM definido por cliente (D008).
-- Stack: _definir em T002_ <!-- ex.: Node.js 20 + TypeScript -->
+- Stack: _proposta em D009, aguarda confirmação_ (Node.js 24 LTS + TypeScript, npm, Vitest, Biome, Zod)
 - Testes: _definir em T004_ <!-- ex.: `npm test` -->
 - Lint/format: _definir em T004_ <!-- ex.: `npm run lint` -->
 
