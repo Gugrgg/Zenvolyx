@@ -45,7 +45,7 @@ Regras do conteúdo:
   (AGENTS.md, seção 5).
 - Mudança de formato sobe `version` e atualiza, na mesma tarefa, todas as configs, este README
   e o validador (T015).
-- Seção nova (ex.: IA, na T011) entra pela tarefa que a decide e é documentada aqui.
+- Seção nova (ex.: lembretes, na T023) entra pela tarefa que a decide e é documentada aqui.
 
 ## Criar um cliente
 
