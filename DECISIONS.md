@@ -82,7 +82,7 @@ Decisão: Todo fluxo de produção roda no n8n: fluxos principais em `automation
 Consequências: Enquanto não houver serviço, a produção é só o container do n8n. Workflows são testados com fixtures e roteiro de verificação; ferramentas e serviços, com Vitest.
 
 ## D012 Fluxos compartilhados entre clientes
-Data: 2026-09-23 | Status: Aceita | Tarefa: T005
+Data: 2026-09-23 | Status: Substituída por D014 | Tarefa: T005
 Contexto: Uma única instância do n8n atende todos os clientes (D006), e a estrutura precisa ser reutilizável.
 Decisão: Os fluxos são os mesmos para todos os clientes. A entrada identifica o cliente (ex.: pelo número de WhatsApp que recebeu a mensagem) e tudo que varia vem da config dele em `clients/<cliente>/` (formato na T006). Secrets ficam em credenciais do n8n, uma por cliente e serviço, que a config referencia pelo nome.
 Consequências: Cliente novo = config + credenciais, sem copiar fluxo. Fluxo exclusivo de um cliente é exceção e exige decisão registrada.
@@ -92,3 +92,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T005
 Contexto: Mensagens de leads são dados pessoais (LGPD), às vezes de saúde, e o n8n guarda o conteúdo de cada execução por padrão.
 Decisão: O registro do lead é o CRM do cliente. O n8n guarda só o estado da conversa e os IDs de mensagens processadas, em tabelas internas, com limpeza automática. Execuções com sucesso não guardam dados; com erro, guardam por poucos dias. Alertas e logs não levam dados pessoais.
 Consequências: Diagnosticar um fluxo que funcionou depende de fixtures e testes, não do histórico de execuções. A retenção é configurada no ambiente (T012).
+
+## D014 Config de cliente em JSON e credenciais da agência
+Data: 2026-09-23 | Status: Aceita | Tarefa: T006
+Contexto: Substitui a D012, que previa uma credencial do n8n por cliente citada pelo nome na config. Os nós do n8n não escolhem credencial durante a execução, então isso obrigaria a copiar fluxos por cliente.
+Decisão: Os fluxos seguem os mesmos para todos os clientes. Cada cliente tem `clients/<id>/config.json` (formato no `clients/README.md`), sem secrets e sem dados pessoais, que o n8n lê de uma pasta montada somente leitura; a entrada acha o cliente ativo pelo `whatsapp.phoneNumberId`. Cada fornecedor usa, de preferência, uma credencial da agência com acesso concedido pelo cliente, e a config guarda só IDs de recursos; credencial por cliente só quando o fornecedor exigir, na forma definida pela tarefa do conector.
+Consequências: Cliente novo é pasta nova mais acessos concedidos, sem copiar fluxo. Config alterada vale depois do commit e da atualização da pasta no servidor, sem reiniciar o n8n.

@@ -1,7 +1,7 @@
 # Visão geral da arquitetura
 
 Como as automações da Zenvolyx se encaixam: n8n, conectores, configuração por cliente e dados.
-O motivo de cada escolha está no [DECISIONS.md](../../DECISIONS.md) (D006 a D013); aqui fica só o desenho.
+O motivo de cada escolha está no [DECISIONS.md](../../DECISIONS.md) (D006 em diante); aqui fica só o desenho.
 
 ## Componentes
 
@@ -30,8 +30,8 @@ flowchart LR
 |-------|-----------|-------|
 | Fluxos principais | `automations/<nome>/` | As etapas do lead (abaixo), em JSON exportado do n8n. |
 | Conectores | `integrations/<tipo>/<fornecedor>/` | Sub-workflows do n8n que falam com WhatsApp, CRM ou agenda. O contrato de entrada e saída de cada tipo fica em `integrations/<tipo>/README.md`; os fluxos chamam o contrato, nunca o fornecedor direto (D011). |
-| Config do cliente | `clients/<cliente>/` | Tudo que muda por cliente: perguntas, regras de qualificação, conectores usados e nomes das credenciais (D012; formato na T006). |
-| Credenciais | cofre do n8n | Tokens e chaves, uma credencial por cliente e serviço. Nunca no repositório. |
+| Config do cliente | `clients/<id>/config.json` | Tudo que muda por cliente: perguntas, regras de qualificação, mensagens e conectores usados, sem secrets (D014; formato no [clients/README.md](../../clients/README.md)). |
+| Credenciais | cofre do n8n | De preferência, uma credencial da agência por fornecedor, com acesso concedido pelo cliente (D014). Nunca no repositório. |
 | Serviços | `services/` | Código TypeScript só quando o n8n não resolver bem (D011). Nenhum previsto por enquanto. |
 | Ferramentas | `scripts/` e `tests/` | Verificações com Vitest (workflows exportados, configs). Rodam no computador, não em produção. |
 
@@ -103,10 +103,11 @@ A montagem do ambiente local é a T012.
 
 | Tarefa | Assunto |
 |--------|---------|
-| T006 | Formato da config de cliente e como o n8n a carrega |
-| T007 | WhatsApp: conta do cliente ou da agência, webhook, mensagens em rajada, atendimento humano |
-| T008 | CRM: contrato do conector e primeiros fornecedores |
-| T010 | Agenda: contrato do conector e primeiro fornecedor |
+| T007 | WhatsApp: conta do cliente ou da agência e acesso ao número (D014), webhook, mensagens em rajada, atendimento humano |
+| T008 | CRM: contrato do conector, primeiros fornecedores e forma da credencial (D014) |
+| T010 | Agenda: contrato do conector, primeiro fornecedor e forma da credencial (D014) |
 | T011 | IA: papel na conversa, provedor, custo e limites de dados |
 | T012 | Ambiente local do n8n (Docker, túnel, retenção de dados) |
 | T013 | Verificação automática dos workflows exportados |
+| T015 | Validador das configs de clientes |
+| T016 | Sub-workflow que carrega a config do cliente |
