@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (D012)
 - [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D007), docs/arquitetura/visao-geral.md
 - [ ] T008 Definir abordagem de integração com CRM e registrar decisão
@@ -34,7 +32,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão [CLAUDE]
+  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (D012)
 
 ## Concluído
 
