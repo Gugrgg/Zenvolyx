@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T008 Definir abordagem de integração com CRM e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008), docs/arquitetura/visao-geral.md
 - [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
   é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta.
   Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
@@ -42,7 +40,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T008 Definir abordagem de integração com CRM e registrar decisão [CLAUDE]
+  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008), docs/arquitetura/visao-geral.md
 
 ## Concluído
 
