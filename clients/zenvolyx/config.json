@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "id": "zenvolyx",
+  "name": "Zenvolyx",
+  "active": false,
+  "timezone": "America/Sao_Paulo",
+  "whatsapp": {
+    "phoneNumberId": "PREENCHER"
+  },
+  "crm": {
+    "provider": "google-sheets",
+    "settings": { "spreadsheetId": "PREENCHER" }
+  },
+  "calendar": {
+    "provider": "google-calendar",
+    "settings": { "calendarId": "PREENCHER" }
+  },
+  "scheduling": {
+    "durationMinutes": 30,
+    "minNoticeHours": 4,
+    "daysAhead": 10,
+    "serviceQuestion": "segment",
+    "hours": {
+      "mon": ["09:00-12:00", "14:00-18:00"],
+      "tue": ["09:00-12:00", "14:00-18:00"],
+      "wed": ["09:00-12:00", "14:00-18:00"],
+      "thu": ["09:00-12:00", "14:00-18:00"],
+      "fri": ["09:00-12:00", "14:00-18:00"]
+    }
+  },
+  "qualification": {
+    "questions": [
+      {
+        "id": "segment",
+        "text": "Qual é o seu tipo de negócio?",
+        "type": "choice",
+        "options": [
+          { "id": "clinic", "label": "Clínica/consultório" },
+          { "id": "office", "label": "Escritório" },
+          { "id": "course", "label": "Curso ou escola" },
+          { "id": "gym", "label": "Academia/estúdio" },
+          { "id": "other", "label": "Outro" }
+        ]
+      },
+      {
+        "id": "volume",
+        "text": "Quantos contatos novos vocês recebem por mês no WhatsApp?",
+        "type": "choice",
+        "options": [
+          { "id": "up_to_50", "label": "Até 50" },
+          { "id": "51_to_200", "label": "51 a 200" },
+          { "id": "over_200", "label": "Mais de 200" }
+        ]
+      },
+      {
+        "id": "crm",
+        "text": "Vocês usam CRM ou planilha para organizar esses contatos?",
+        "type": "choice",
+        "options": [
+          { "id": "crm", "label": "Sim, um CRM" },
+          { "id": "sheet", "label": "Uso planilha" },
+          { "id": "none", "label": "Não uso nada" }
+        ]
+      }
+    ],
+    "rules": [
+      { "question": "segment", "in": ["clinic", "office", "course", "gym"] }
+    ]
+  },
+  "ai": {
+    "enabled": true,
+    "knowledge": [
+      {
+        "topic": "O que a Zenvolyx faz",
+        "text": "Automatiza o atendimento pelo WhatsApp de negócios de serviço: responde novos contatos na hora, faz as perguntas de qualificação, marca horários na agenda e registra tudo no CRM."
+      },
+      {
+        "topic": "Para quem",
+        "text": "Clínicas, consultórios, escritórios, cursos, academias e outros negócios que vendem pelo WhatsApp e trabalham com agendamento."
+      },
+      {
+        "topic": "WhatsApp oficial",
+        "text": "Usamos a API oficial do WhatsApp, da Meta, sem ferramentas não oficiais que arriscam o bloqueio do número."
+      },
+      {
+        "topic": "Número e aplicativo",
+        "text": "O número continua sendo do cliente, que segue usando o app WhatsApp Business no celular. Quando alguém da equipe responde pelo app, a automação pausa naquela conversa."
+      },
+      {
+        "topic": "CRM e agenda",
+        "text": "Integramos com o CRM que o cliente já usa; quem não tem recebe uma planilha organizada. Os horários vêm da agenda do Google do cliente."
+      },
+      {
+        "topic": "Inteligência artificial",
+        "text": "A IA entende mensagens escritas do jeito que a pessoa escrever e tira dúvidas com as informações aprovadas pelo negócio. Ela não inventa preços nem horários."
+      }
+    ]
+  },
+  "messages": {
+    "welcome": "Olá! Aqui é a Zenvolyx, automação de atendimento pelo WhatsApp com IA. Vou fazer três perguntas rápidas para entender o seu negócio.",
+    "handoff": "Obrigado! Vou chamar alguém da equipe da Zenvolyx para continuar com você.",
+    "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve.",
+    "notQualified": "Obrigado pelas respostas! Hoje nosso foco são negócios de atendimento com agendamento, mas vou passar seu contato para a equipe avaliar.",
+    "chooseSlot": "Ótimo! Vamos marcar uma apresentação de 30 minutos por videochamada. Escolha um horário:",
+    "noSlots": "Não encontrei horários livres agora. Vou chamar alguém da equipe para combinar com você.",
+    "booked": "Pronto! Sua apresentação ficou para {slot}. Enviaremos o link da videochamada antes do horário.",
+    "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
+  }
+}

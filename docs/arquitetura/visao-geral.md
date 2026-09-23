@@ -2,7 +2,7 @@
 
 Como as automações da Zenvolyx se encaixam: n8n, conectores, configuração por cliente e dados.
 O motivo de cada escolha está no [DECISIONS.md](../../DECISIONS.md) (D006 em diante); aqui fica só o desenho.
-Detalhes do WhatsApp: [whatsapp.md](whatsapp.md). Detalhes da IA: [ia.md](ia.md).
+Detalhes do WhatsApp: [whatsapp.md](whatsapp.md). Detalhes da IA: [ia.md](ia.md). Demo: [demo.md](demo.md).
 
 ## Componentes
 
