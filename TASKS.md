@@ -37,15 +37,20 @@ Formato (linhas de baixo são opcionais):
   Depende: T007, T012, T016 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
 - [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
   Depende: T019 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
+- [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone), com planilha modelo e passo a passo da conta de serviço do Google
+  Depende: T008, T012 | Sugerido: CODEX | Ref: integrations/crm/README.md, DECISIONS.md (D017)
 
 ## Em andamento
 
-- [ ] T008 Definir abordagem de integração com CRM e registrar decisão [CLAUDE]
-  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008), docs/arquitetura/visao-geral.md
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T008 Definir abordagem de integração com CRM e registrar decisão
+  Ref: integrations/crm/README.md, DECISIONS.md (D017)
+  Validação: premissa da D014 conferida em 2026-09 (o n8n Community ainda não escolhe credencial durante a execução; resolução dinâmica só no Enterprise); modelo com `crm` conferido por script temporário; `npm test` e `npm run typecheck` passaram; `npm run lint` passou numa cópia LF; 12 links locais válidos.
 
 - [x] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
   Ref: docs/arquitetura/whatsapp.md, integrations/whatsapp/README.md, DECISIONS.md (D015, D016)
@@ -112,7 +117,7 @@ Arquivos principais:
 - DECISIONS.md (D014)
 Próxima tarefa: T015
 Observações:
-- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` e `calendar` aceitam, por enquanto, qualquer `provider` em kebab-case e `settings` como objeto (T008 e T010 restringem). Configs inválidas de exemplo em `tests/fixtures/clients/`.
+- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `calendar` segue aceitando qualquer `provider` em kebab-case e `settings` como objeto até a T010. Configs inválidas de exemplo em `tests/fixtures/clients/`.
 - T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
 
 ### Handoff T007
@@ -128,3 +133,16 @@ Observações:
 - T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição.
 - T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013).
 - O número de teste da Meta não usa o app, então não gera `smb_message_echoes`: a pausa por eco da equipe só é testada com fixture até existir cliente em coexistência (T017).
+
+### Handoff T008
+Concluído:
+- contrato do CRM em integrations/crm/README.md; D017
+- `crm` obrigatório na config; modelo com exemplo `google-sheets`
+Arquivos principais:
+- integrations/crm/README.md
+- DECISIONS.md (D017)
+Próxima tarefa: T021
+Observações:
+- T021: README com passo a passo simples para o dono criar a conta de serviço no Google Cloud (com a Sheets API ativada) e cadastrar a credencial no n8n; a chave JSON fica só no n8n. Cabeçalho da aba `Leads` num CSV modelo em `integrations/crm/google-sheets/`, para importar numa planilha nova.
+- T021: fixtures fictícias em `tests/fixtures/crm/`: lead novo, atualização pelo BSUID, BSUID novo com o mesmo telefone e fornecedor desconhecido.
+- T019: o evento da entrada ganhou `name` (nome do perfil do WhatsApp, opcional), que vai para o CRM (docs/arquitetura/whatsapp.md).
