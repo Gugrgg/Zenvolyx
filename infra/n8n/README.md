@@ -21,6 +21,8 @@ docker compose version
 
 `docker version` precisa mostrar **Client e Server**. Se faltar Server, abrir o
 Docker Desktop e esperar o motor iniciar. Os comandos abaixo partem sempre da raiz.
+Se `docker` não for encontrado após instalar, reabrir o terminal. Na instalação por
+usuário, o executável fica em `%LOCALAPPDATA%/Programs/DockerDesktop/resources/bin/docker.exe`.
 
 ## 2. Criar o .env uma única vez
 
@@ -160,6 +162,9 @@ os JSONs dos workflows. Atualizar a tag de propósito e repetir as verificaçõe
 
 As verificações do repositório continuam sendo `npm test`, `npm run lint` e
 `npm run typecheck`; elas não substituem os testes dos containers.
+
+Para testar Data tables nesta versão, usar o editor ou um webhook no servidor:
+o comando isolado `n8n execute` não inicializou esse módulo na validação da T012.
 
 ## Referências
 

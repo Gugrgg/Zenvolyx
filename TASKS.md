@@ -14,6 +14,7 @@ Formato (linhas de baixo são opcionais):
 
 - [ ] T013 Criar verificação automática dos workflows exportados (sem credenciais, tokens ou `pinData`) em `scripts/`, com testes
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ciclo de um workflow)
+  Observação herdada da T005: fixtures fictícias em `tests/fixtures/workflows/` (limpo, com `pinData`, com token num parâmetro); erro aponta arquivo e nó, sem imprimir o valor suspeito.
 - [ ] T014 Fazer `npm run lint` passar numa cópia do repositório no Windows (arquivos com CRLF), via `.gitattributes` ou config do Biome
   Sugerido: CODEX
 - [ ] T015 Criar o validador das configs de clientes (schema Zod da versão 1 e teste que valida todas as `clients/*/config.json`)
@@ -51,16 +52,16 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-- [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README [CODEX]
-  Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
-  Implementado: `infra/n8n/compose.yaml`, README passo a passo, `.env.example`, `.env` local não versionado e D021. n8n 2.40.5 e cloudflared 2026.9.1; Data tables confirmadas no código da versão.
-  Validação: Compose 5.5.1 validou o arquivo, as variáveis obrigatórias, loopback, volume, montagem somente leitura, retenção e túnel opcional; `npm test` e `npm run typecheck` passaram; lint passou numa cópia LF. Lint local falha pelo CRLF já registrado na T014.
-  Pendente: instalar/iniciar Docker Desktop, depois verificar saúde, login, persistência, leitura dos clientes e webhook pelo túnel conforme README. WSL já instalado pelo dono: `wsl --status` retorna 0, com versão padrão 2. Docker ainda não localizado nos programas instalados, caminhos padrão ou processos em execução.
-  Bloqueio da instalação: após autorização do dono, a tentativa automatizada de baixar e instalar Docker Desktop foi rejeitada pela revisão de aprovação com `blocked by policy`, sem motivo detalhado; o comando não foi executado. Necessário concluir a instalação pelo Windows e retomar os testes.
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
+  Ref: infra/n8n/README.md, DECISIONS.md (D021)
+  Validação: Docker Desktop 4.92.0/Engine 29.8.0 com WSL 2; n8n 2.40.5 saudável, login criado pelo dono e API protegida; configs legíveis e somente leitura, acesso externo ao diretório recusado; Data table com linha fictícia persistiu após recriar o container; sucesso não salvo e erro retido; webhook HTTPS pelo túnel respondeu. Workflows, execuções e tabela temporários removidos; túnel desligado, URL local restaurada e n8n mantido ligado.
+  Verificações: Compose, `npm test` e `npm run typecheck` passaram; lint passou na cópia LF. Correção do lint no checkout CRLF permanece na T014. `.env` preservado e fora do Git.
 
 - [x] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
   é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação
@@ -120,33 +121,18 @@ Observações:
 - ...
 -->
 
-### Handoff T005
-Concluído:
-- arquitetura em docs/arquitetura/visao-geral.md; decisões D011 a D013
-- tarefas derivadas: T010 e T011 (Claude); T012, T013 e T014 (Codex)
-Arquivos principais:
-- docs/arquitetura/visao-geral.md
-- DECISIONS.md (D011 a D013)
-Próxima tarefa: T012
-Observações:
-- T012: `infra/` é pasta nova; registrar em DECISIONS.md e na seção 3 do AGENTS.md. Imagem do n8n com versão fixa; porta só em `127.0.0.1`; dados num volume; `N8N_ENCRYPTION_KEY`, `WEBHOOK_URL` e fuso `America/Sao_Paulo` via `.env`, com os nomes no `.env.example`. Retenção conforme D013 (ex.: `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, `EXECUTIONS_DATA_MAX_AGE=168`). Confirmar que a versão escolhida tem tabelas internas (Data tables). README em passos simples: o dono tem experiência básica com terminal (AGENTS.md, seção 4).
-- T012 (D014): montar `clients/` somente leitura no container, num caminho liberado para leitura de arquivos pelo n8n (ex.: `N8N_RESTRICT_FILE_ACCESS_TO`); o sub-workflow da T016 lê as configs dali.
-- T013: ainda não há workflows; validar com fixtures fictícias em `tests/fixtures/workflows/` (um limpo, um com `pinData`, um com token num parâmetro). O erro aponta arquivo e nó, sem imprimir o valor suspeito.
-- Nesta máquina não há Node no PATH; a validação da T005 usou o Node 24 do runtime do Codex.
-
 ### Handoff T012
-Implementado:
-- ambiente e instruções em `infra/n8n/`; D021; nomes das variáveis em `.env.example`
-- `.env` local gerado com chave aleatória, ignorado pelo Git; preservar a chave existente
+Concluído:
+- n8n local saudável, com login, Data tables e persistência testados; túnel HTTPS testado e desligado
+- `.env` local preservado, ignorado pelo Git; manter a chave existente
 Arquivos principais:
 - infra/n8n/compose.yaml
 - infra/n8n/README.md
-Próxima tarefa: T012 (concluir a validação do ambiente)
+Próxima tarefa: T016
 Observações:
-- WSL instalado pelo dono e validado: `wsl --status` retorna 0, versão padrão 2. Docker Desktop ainda não foi localizado nos programas instalados, caminhos padrão ou processos; confirmar com o dono se usou outra pasta. Containers, login, persistência e túnel continuam sem teste. Após instalar/iniciar Docker, seguir os passos 3 a 6 do README antes de concluir a tarefa.
-- O dono autorizou instalar Docker/WSL, mas a revisão automática bloqueou o comando de download e instalação (`blocked by policy`, sem detalhes), antes de executá-lo. A instalação precisa ser concluída manualmente no Windows; não repetir a mesma ação por outra ferramenta para contornar o bloqueio.
-- Validação estática feita com Compose 5.5.1 independente do Docker Engine; `config --quiet` passou e `.env.example` vazio foi recusado. Testes e tipos passaram; lint passou na cópia LF (problema local de CRLF permanece na T014).
-- Data tables e endpoint de prontidão confirmados no código do n8n 2.40.5; tags das duas imagens existem no registry. Não foi iniciado nenhum túnel público.
+- Ler `/files/clients/*/config.json` pelo nó Read/Write Files from Disk; a montagem é somente leitura e esse é o diretório liberado para os nós de arquivo. Ignorar clientes inativos (D014).
+- Testar Data tables pelo servidor/editor ou webhook: nesta versão, `n8n execute` isolado não inicializou o módulo Data table; a execução pelo webhook funcionou. Os testes temporários da T012 foram removidos.
+- Docker Desktop está em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer numa sessão antiga, reabrir o terminal ou usar `resources/bin/docker.exe` dessa pasta.
 
 ### Handoff T006
 Concluído:
