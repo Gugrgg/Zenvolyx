@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T003 Criar estrutura de pastas da seção 3 do AGENTS.md com README curto em cada uma
-  Depende: T001, T002 | Sugerido: CODEX
 - [ ] T004 Configurar testes e lint; preencher os comandos na seção 1 do AGENTS.md
   Depende: T003 | Sugerido: CODEX
 - [ ] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/
@@ -36,6 +34,9 @@ _(vazio)_
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
 
+- [x] T003 Criar estrutura de pastas da seção 3 do AGENTS.md com README curto em cada uma
+  Ref: DECISIONS.md (D010)
+  Validação: 9 pastas com READMEs de propósito, uso e validação; 5 links locais válidos; `git diff --cached --check` passou. Suíte automatizada pendente da T004.
 - [x] T001 Inicializar Git com `main` e `dev`, `.gitignore` e `.env.example` vazio
   Validação: 15 casos de ignore, `.env.example` vazio e `git diff --cached --check` passaram.
   Remoto: `origin` configurado para `https://github.com/Gugrgg/Zenvolyx.git`; sem push, pois a consulta retornou `Repository not found`.
