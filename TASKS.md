@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/
-  Depende: T002 | Sugerido: CLAUDE
 - [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE
 - [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
@@ -26,7 +24,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/ [CLAUDE]
+  Depende: T002 | Sugerido: CLAUDE
 
 ## Concluído
 
