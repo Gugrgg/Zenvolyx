@@ -89,7 +89,7 @@ Nos dois ambientes:
   sem ela, as credenciais salvas no n8n se perdem;
 - o editor do n8n sempre exige login e, em produção, não fica exposto: clientes não acessam o n8n (D006).
 
-A montagem do ambiente local é a T012.
+Arquivos e passo a passo do ambiente local (T012): [infra/n8n/README.md](../../infra/n8n/README.md).
 
 ## Ciclo de um workflow
 

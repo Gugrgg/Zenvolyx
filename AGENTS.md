@@ -46,6 +46,7 @@ Ler `DECISIONS.md` só quando a tarefa mexer em arquitetura, estrutura ou algo j
 ├── .env.example     # nomes das variáveis, sem valores
 ├── package.json  package-lock.json  tsconfig.json  biome.json
 ├── automations/     # workflows n8n exportados (JSON), uma pasta por automação
+├── infra/           # ambientes Docker; n8n local em infra/n8n/
 ├── integrations/    # conectores reutilizáveis: WhatsApp, CRM etc.
 ├── services/        # APIs pequenas e webhooks
 ├── scripts/         # scripts auxiliares e ferramentas internas

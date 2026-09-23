@@ -58,7 +58,8 @@ Regras do conteúdo:
 
 ## Como o n8n lê
 
-A pasta `clients/` é montada somente leitura no container do n8n (T012). O sub-workflow
+A pasta `clients/` é montada somente leitura em `/files/clients` no container do n8n
+([ambiente local](../infra/n8n/README.md), T012). O sub-workflow
 `automations/load-client-config/` (T016) lê as configs, pega o cliente ativo com o
 `phoneNumberId` da mensagem e devolve a config dele. Uma config alterada vale a partir da
 mensagem seguinte, sem reiniciar o n8n.

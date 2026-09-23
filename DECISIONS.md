@@ -134,3 +134,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T009
 Contexto: A conversa guiada precisa lembrar a etapa, as respostas e os horários oferecidos entre uma mensagem e outra, e a D013 limita o que o n8n guarda.
 Decisão: Uma tabela interna do n8n guarda, por cliente e BSUID, só etapa, índice da pergunta atual, respostas às perguntas da config, falhas seguidas, horários oferecidos, pausa, recusa e data da última interação. Um fluxo agendado apaga as linhas sem interação há 30 dias. Texto livre do lead não entra na tabela.
 Consequências: Lead que volta depois de 30 dias recomeça a conversa. O histórico que importa ao cliente fica no CRM (D017).
+
+## D021 Ambiente local em infra/n8n/
+Data: 2026-09-23 | Status: Aceita | Tarefa: T012
+Contexto: Materializar o ambiente já definido em D006, D013 e D014, com instruções simples para testes locais.
+Decisão: Adicionar `infra/` e usar Docker Compose em `infra/n8n/`: n8n 2.40.5, SQLite no volume `n8n_data`, porta publicada apenas em `127.0.0.1`, `clients/` montada somente leitura em `/files/clients` e restrição de leitura nesse caminho. Chave, URL de webhook e fusos vêm do `.env` da raiz. Cloudflare Quick Tunnel 2026.9.1 fica em perfil opcional, ligado só durante testes após criar o login do dono.
+Consequências: Sucessos, execuções manuais e progresso não são persistidos; erros ficam elegíveis para limpeza após 168 horas, com limite de 1.000 execuções. A limpeza é periódica; não elimina linhas das Data tables (limpeza da conversa fica na T028). O túnel muda de URL a cada recriação e torna a instância acessível publicamente durante o teste, sempre com login no editor. A chave e o volume precisam de backup conjunto.

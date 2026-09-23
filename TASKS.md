@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
-  Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
 - [ ] T013 Criar verificação automática dos workflows exportados (sem credenciais, tokens ou `pinData`) em `scripts/`, com testes
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ciclo de um workflow)
 - [ ] T014 Fazer `npm run lint` passar numa cópia do repositório no Windows (arquivos com CRLF), via `.gitattributes` ou config do Biome
@@ -53,7 +51,11 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README [CODEX]
+  Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
+  Implementado: `infra/n8n/compose.yaml`, README passo a passo, `.env.example`, `.env` local não versionado e D021. n8n 2.40.5 e cloudflared 2026.9.1; Data tables confirmadas no código da versão.
+  Validação: Compose 5.5.1 validou o arquivo, as variáveis obrigatórias, loopback, volume, montagem somente leitura, retenção e túnel opcional; `npm test` e `npm run typecheck` passaram; lint passou numa cópia LF. Lint local falha pelo CRLF já registrado na T014.
+  Pendente: instalar/iniciar Docker Desktop com WSL 2 (Docker ausente nesta máquina; `wsl --status` retorna 50), depois verificar saúde, login, persistência, leitura dos clientes e webhook pelo túnel conforme README. Não foi possível executar os containers nesta sessão.
 
 ## Concluído
 
@@ -130,6 +132,19 @@ Observações:
 - T012 (D014): montar `clients/` somente leitura no container, num caminho liberado para leitura de arquivos pelo n8n (ex.: `N8N_RESTRICT_FILE_ACCESS_TO`); o sub-workflow da T016 lê as configs dali.
 - T013: ainda não há workflows; validar com fixtures fictícias em `tests/fixtures/workflows/` (um limpo, um com `pinData`, um com token num parâmetro). O erro aponta arquivo e nó, sem imprimir o valor suspeito.
 - Nesta máquina não há Node no PATH; a validação da T005 usou o Node 24 do runtime do Codex.
+
+### Handoff T012
+Implementado:
+- ambiente e instruções em `infra/n8n/`; D021; nomes das variáveis em `.env.example`
+- `.env` local gerado com chave aleatória, ignorado pelo Git; preservar a chave existente
+Arquivos principais:
+- infra/n8n/compose.yaml
+- infra/n8n/README.md
+Próxima tarefa: T012 (concluir a validação do ambiente)
+Observações:
+- Docker Desktop não está instalado; `wsl --status` retorna 50. Containers, login, persistência e acesso pelo túnel não puderam ser testados. Instalar/iniciar Docker com WSL 2 e seguir os passos 3 a 6 do README antes de concluir a tarefa.
+- Validação estática feita com Compose 5.5.1 independente do Docker Engine; `config --quiet` passou e `.env.example` vazio foi recusado. Testes e tipos passaram; lint passou na cópia LF (problema local de CRLF permanece na T014).
+- Data tables e endpoint de prontidão confirmados no código do n8n 2.40.5; tags das duas imagens existem no registry. Não foi iniciado nenhum túnel público.
 
 ### Handoff T006
 Concluído:

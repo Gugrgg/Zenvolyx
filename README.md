@@ -26,7 +26,8 @@ diretamente no Node, sem build. Use extensões `.ts` nos imports locais e
 Essas restrições seguem o [suporte a TypeScript do Node.js](https://nodejs.org/docs/latest-v24.x/api/typescript.html).
 
 A suíte inicial verifica a execução de TypeScript no Node. Ainda não há serviços,
-conectores ou workflows implementados. O n8n é configurado separadamente, conforme D006.
+conectores ou workflows implementados. Para configurar o n8n com Docker, seguir o
+[passo a passo do ambiente local](infra/n8n/README.md) (D006, T012).
 
 ## Trabalhando com agentes
 
