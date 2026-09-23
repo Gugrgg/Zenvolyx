@@ -42,16 +42,27 @@ Formato (linhas de baixo são opcionais):
   Depende: T024 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Avaliação)
 - [ ] T026 Escolher o serviço de transcrição de áudio (custo, LGPD e integração), para depois da demo
   Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
+- [ ] T027 Criar o fluxo de erro global e o sub-workflow `automations/alert/` (aviso por e-mail à agência, sem dados pessoais)
+  Depende: T012 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Erros), docs/arquitetura/demo.md
+- [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe e pedido para parar, com o estado em tabela (D020)
+  Depende: T016, T018, T019, T021, T024, T027 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), DECISIONS.md (D020)
+- [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado, confirmação e CRM `scheduled`
+  Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
+- [ ] T030 Testar a demo de ponta a ponta com o dono e escrever o roteiro de apresentação
+  Depende: T020, T025, T029 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md
 
 ## Em andamento
 
-- [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
-  é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta. [CLAUDE]
-  Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
+  é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação
+  Ref: docs/arquitetura/demo.md, clients/zenvolyx/, DECISIONS.md (D020)
+  Validação: configs do modelo e da Zenvolyx conferidas contra todas as regras do formato (script temporário); `npm test` e `npm run typecheck` passaram; `npm run lint` passou numa cópia LF, já com o JSON novo; 24 links locais válidos.
 
 - [x] T011 Definir o uso de IA na conversa (papel, provedor, custo, limites de dados, áudio e Meta Business Agent) e registrar decisão
   Ref: docs/arquitetura/ia.md, integrations/ai/README.md, DECISIONS.md (D019)
@@ -130,7 +141,7 @@ Arquivos principais:
 - DECISIONS.md (D014)
 Próxima tarefa: T015
 Observações:
-- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `timezone` obrigatório e válido (IANA); `calendar` opcional, com `provider` `google-calendar` e `settings.calendarId`; com `calendar`, `scheduling` obrigatório: `durationMinutes` e `daysAhead` inteiros positivos, `minNoticeHours` maior ou igual a zero, `hours` só com chaves `mon` a `sun` e faixas `HH:MM-HH:MM` crescentes e sem sobreposição, e `serviceQuestion` (opcional) apontando para pergunta `choice` (T010). `ai` opcional: `enabled` booleano e `knowledge` com itens `topic` e `text` não vazios, até 6.000 caracteres no total (T011). Configs inválidas de exemplo em `tests/fixtures/clients/`.
+- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `timezone` obrigatório e válido (IANA); `calendar` opcional, com `provider` `google-calendar` e `settings.calendarId`; com `calendar`, `scheduling` obrigatório: `durationMinutes` e `daysAhead` inteiros positivos, `minNoticeHours` maior ou igual a zero, `hours` só com chaves `mon` a `sun` e faixas `HH:MM-HH:MM` crescentes e sem sobreposição, e `serviceQuestion` (opcional) apontando para pergunta `choice` (T010). `ai` opcional: `enabled` booleano e `knowledge` com itens `topic` e `text` não vazios, até 6.000 caracteres no total (T011). `messages` com as oito chaves (`welcome`, `handoff`, `failure`, `notQualified`, `chooseSlot`, `noSlots`, `booked` contendo `{slot}`, `stopped`); cliente inativo pode ter `PREENCHER` nos IDs (T009). Configs inválidas de exemplo em `tests/fixtures/clients/`.
 - T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
 
 ### Handoff T007
@@ -187,3 +198,17 @@ Observações:
 - T024: o Opus 5.5 não aceita desligar o raciocínio nem `tool_choice` forçado (usar a saída estruturada). Conferir `stop_reason` antes de ler a resposta: `refusal` e `max_tokens` viram falha. O esquema da API não limita tamanho nem valores: validar `answer` contra as opções e `reply` até 400 caracteres no conector.
 - T024: instruções num arquivo do repositório (ex.: `integrations/ai/anthropic/instructions.md`), usado pelo sub-workflow e pela avaliação; um teste confere que o JSON exportado usa o mesmo texto e o mesmo modelo.
 - T025: casos em `tests/fixtures/ai/`: escolha por texto livre, dúvida respondida pela base, dúvida fora da base, pedido de atendente, "parar", urgência de saúde e tentativa de mudar as instruções. Script com o SDK oficial `@anthropic-ai/sdk` (dependência justificada no commit), `ANTHROPIC_API_KEY` no `.env` (nome no `.env.example`) e relatório com acertos e custo da rodada; roda só quando pedido.
+
+### Handoff T009
+Concluído:
+- demo especificada em docs/arquitetura/demo.md; cliente `clients/zenvolyx/` (inativo); D020
+- mensagens novas na config: `notQualified`, `chooseSlot`, `noSlots`, `booked`, `stopped`
+Arquivos principais:
+- docs/arquitetura/demo.md
+- clients/zenvolyx/config.json
+Próxima tarefa: T028
+Observações:
+- T027: o sub-workflow de aviso recebe cliente, tipo (erro, equipe chamada, falha de gravação) e uma referência técnica, nunca telefone, nome ou texto; destinatário e servidor de e-mail ficam no `.env` ou em credencial do n8n (nomes no `.env.example`). O fluxo de erro global do n8n usa o mesmo sub-workflow.
+- T028: conversa como máquina de estados sobre a tabela da D020, com limpeza diária das linhas sem interação há 30 dias. Pergunta com até 3 opções vai em botões; de 4 a 10, em lista (botão "Ver opções"). Gravar no CRM no primeiro contato e a cada mudança de etapa (D017). Fixtures fictícias em `tests/fixtures/conversation/` e roteiro de verificação no README.
+- T029: lista com até 9 horários mais "Nenhum desses"; o `id` de cada linha aponta para o horário guardado no estado; `slot_taken` gera nova lista; `{slot}` em `messages.booked` recebe o `label` do horário.
+- Textos, regra e base da Zenvolyx são proposta: o dono revisa antes de ativar (clients/zenvolyx/README.md).
