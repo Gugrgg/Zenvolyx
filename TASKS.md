@@ -1,0 +1,67 @@
+# TASKS.md
+
+Fila central de trabalho. Regras: `AGENTS.md`, seções 6 e 7.
+Tarefas curtas. Detalhes ficam na documentação da área (linha `Ref:`).
+
+Formato (linhas de baixo são opcionais):
+
+```
+- [ ] T000 Descrição curta
+  Depende: T000 | Sugerido: CLAUDE ou CODEX | Ref: caminho/do/doc.md
+```
+
+## Backlog
+
+- [ ] T003 Criar estrutura de pastas da seção 3 do AGENTS.md com README curto em cada uma
+  Depende: T001, T002 | Sugerido: CODEX
+- [ ] T004 Configurar testes e lint; preencher os comandos na seção 1 do AGENTS.md
+  Depende: T003 | Sugerido: CODEX
+- [ ] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/
+  Depende: T002 | Sugerido: CLAUDE
+- [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
+  Depende: T005 | Sugerido: CLAUDE
+- [ ] T007 Definir abordagem de integração com WhatsApp e registrar decisão
+  Depende: T005 | Sugerido: CLAUDE
+- [ ] T008 Definir abordagem de integração com CRM e registrar decisão
+  Depende: T005 | Sugerido: CLAUDE
+
+## Em andamento
+
+_(vazio)_
+
+## Concluído
+
+<!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T001 Inicializar Git com `main` e `dev`, `.gitignore` e `.env.example` vazio
+  Validação: 15 casos de ignore, `.env.example` vazio e `git diff --cached --check` passaram.
+  Remoto: `origin` configurado para `https://github.com/Gugrgg/Zenvolyx.git`; sem push, pois a consulta retornou `Repository not found`.
+- [x] T002 Propor stack (linguagem, runtime, testes, lint) e registrar em DECISIONS.md
+- [x] T000 Criar estrutura de contexto (AGENTS, CLAUDE, CODEX, TASKS, DECISIONS, README)
+
+## Handoffs
+
+<!-- Remover o handoff quando a "Próxima tarefa" dele for concluída. Formato:
+
+### Handoff T031
+Concluído:
+- webhook criado
+- payload validado
+Arquivos principais:
+- services/leads/webhook.ts
+Próxima tarefa: T032
+Observações:
+- ...
+-->
+
+### Handoff T002
+Concluído:
+- stack proposta em D006 (DECISIONS.md) e linha "Stack" da seção 1 do AGENTS.md preenchida
+Arquivos principais:
+- DECISIONS.md (D006)
+Próxima tarefa: T004
+Observações:
+- D006 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
+- T004: `package.json` com scripts `test` (vitest run), `lint` (biome check), `typecheck` (tsc --noEmit); `"engines": {"node": ">=24"}`; tsconfig com `strict`, `noEmit`, `erasableSyntaxOnly`, `allowImportingTsExtensions`, `module`/`moduleResolution` `nodenext`.
+- Zod só entra quando surgir o primeiro payload externo; framework HTTP fica para o primeiro endpoint.
+- Sem Git ainda (T001 pendente): nada foi commitado.
