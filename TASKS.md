@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T015 Criar o validador das configs de clientes (schema Zod da versão 1 e teste que valida todas as `clients/*/config.json`)
-  Depende: T006 | Sugerido: CODEX | Ref: clients/README.md, DECISIONS.md (D014)
 - [ ] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
   Depende: T006, T012 | Sugerido: CODEX | Ref: clients/README.md (Como o n8n lê)
 - [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
@@ -52,6 +50,11 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T015 Criar o validador das configs de clientes (schema Zod da versão 1 e teste que valida todas as `clients/*/config.json`)
+  Ref: scripts/client-config-schema.ts, scripts/check-clients.ts, tests/client-config.test.ts, clients/README.md
+  Implementação: Zod 4.6.5 conforme D009 e handoff T006; `npm run check:clients`, validação das relações entre campos e entre clientes ativos, fixtures fictícias válidas/inválidas e mensagens sem valores recebidos. Configs atuais preservadas e inativas.
+  Validação: `npm test` (112 testes, 84 da T015), `npm run lint`, `npm run typecheck` e `npm run check:clients` (2 configs) passaram. CLI testada com sucesso, regra inválida, JSON malformado, arquivo ausente e pasta vazia/inexistente; nenhuma API externa utilizada.
 
 - [x] T014 Fazer `npm run lint` passar numa cópia do repositório no Windows (arquivos com CRLF), via `.gitattributes` ou config do Biome
   Ref: .gitattributes, README.md (Desenvolvimento)
@@ -139,18 +142,18 @@ Observações:
 - Testar Data tables pelo servidor/editor ou webhook: nesta versão, `n8n execute` isolado não inicializou o módulo Data table; a execução pelo webhook funcionou. Os testes temporários da T012 foram removidos.
 - Docker Desktop está em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer numa sessão antiga, reabrir o terminal ou usar `resources/bin/docker.exe` dessa pasta.
 
-### Handoff T006
+### Handoff T015
 Concluído:
-- formato da config de cliente (versão 1) em clients/README.md; modelo em clients/_template/
-- D014 substitui a D012: nós do n8n não escolhem credencial durante a execução
+- schema Zod da config versão 1, verificação de todas as pastas e testes de regras/limites
+- comando `npm run check:clients`; `npm test` também valida as configs atuais
 Arquivos principais:
+- scripts/client-config-schema.ts
+- scripts/check-clients.ts
 - clients/README.md
-- clients/_template/config.json
-- DECISIONS.md (D014)
-Próxima tarefa: T015
+Próxima tarefa: T016
 Observações:
-- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `timezone` obrigatório e válido (IANA); `calendar` opcional, com `provider` `google-calendar` e `settings.calendarId`; com `calendar`, `scheduling` obrigatório: `durationMinutes` e `daysAhead` inteiros positivos, `minNoticeHours` maior ou igual a zero, `hours` só com chaves `mon` a `sun` e faixas `HH:MM-HH:MM` crescentes e sem sobreposição, e `serviceQuestion` (opcional) apontando para pergunta `choice` (T010). `ai` opcional: `enabled` booleano e `knowledge` com itens `topic` e `text` não vazios, até 6.000 caracteres no total (T011). `messages` com as oito chaves (`welcome`, `handoff`, `failure`, `notQualified`, `chooseSlot`, `noSlots`, `booked` contendo `{slot}`, `stopped`); cliente inativo pode ter `PREENCHER` nos IDs (T009). Configs inválidas de exemplo em `tests/fixtures/clients/`.
-- T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
+- Ler as configs da pasta montada pela T012 e ignorar `active: false`. Sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
+- O validador roda no repositório; não instala Zod no container n8n. Validar configs antes de publicar. O modelo e a Zenvolyx continuam inativos; os IDs reais da demo ainda precisam substituir `PREENCHER` antes da ativação.
 
 ### Handoff T007
 Concluído:

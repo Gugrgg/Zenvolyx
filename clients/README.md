@@ -53,7 +53,7 @@ Regras do conteúdo:
 2. Preencher `config.json` e o README, com `active: false`.
 3. Conceder os acessos que cada conector pede (ex.: compartilhar a planilha com a conta da
    agência), conforme o README do conector.
-4. Rodar `npm test` (valida as configs a partir da T015) e testar com um lead fictício.
+4. Rodar `npm run check:clients` (ou `npm test`, que também valida as configs) e testar com um lead fictício.
 5. Trocar para `active: true`, fazer commit e atualizar a pasta no servidor.
 
 ## Como o n8n lê
@@ -64,4 +64,27 @@ A pasta `clients/` é montada somente leitura em `/files/clients` no container d
 `phoneNumberId` da mensagem e devolve a config dele. Uma config alterada vale a partir da
 mensagem seguinte, sem reiniciar o n8n.
 
-Como testar: `npm test` na raiz valida todas as configs (a partir da T015).
+## Validação automática
+
+`npm run check:clients` valida todas as `clients/*/config.json`, inclusive modelos
+e clientes inativos. O schema Zod da versão 1 fica em
+[scripts/client-config-schema.ts](../scripts/client-config-schema.ts); o comando
+termina com código 1 se houver problema, indicando arquivo e campo sem imprimir valores.
+
+Além dos tipos e campos obrigatórios, confere:
+
+- ID igual ao nome da pasta, sem espaços nas bordas; modelo com prefixo `_` inativo;
+- IDs de WhatsApp únicos entre ativos e nenhum `PREENCHER` nos IDs de recursos de clientes ativos;
+- IDs de perguntas únicos e de opções únicos dentro de cada pergunta, limites das opções
+  e regras que citam perguntas/opções existentes; `number` exige `min` e/ou `max`, com `min <= max`;
+- fuso IANA, agenda com regras de horário, faixas em ordem crescente e sem sobreposição
+  (horários contíguos são aceitos; faixas que atravessam a meia-noite não são aceitas);
+- serviço apontando para pergunta `choice`, base de IA com até 6.000 caracteres
+  somando `topic` e `text`, e confirmação com `{slot}`.
+
+Campos desconhecidos são rejeitados para detectar erros de digitação e adições fora
+do formato. A validação não altera arquivos, não consulta fornecedores e não verifica
+os acessos às contas. A revisão de conteúdo para evitar secrets e dados pessoais continua necessária.
+
+`npm test -- tests/client-config.test.ts` executa os casos fictícios e a validação
+das configs do repositório. A suíte completa (`npm test`) inclui essa verificação.

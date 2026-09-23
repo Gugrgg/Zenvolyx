@@ -35,3 +35,19 @@ commitar. O script não altera nem limpa arquivos automaticamente.
 
 `npm test -- tests/check-workflows.test.ts` testa fixtures fictícias, falhas da CLI
 e os exports reais do repositório. A suíte completa também executa essa verificação.
+
+## Validar configurações de clientes
+
+`npm run check:clients` verifica `clients/*/config.json`. Para uma pasta alternativa,
+usar `npm run check:clients -- caminho/clients` (subpastas contendo `config.json`).
+Pasta vazia, arquivo ausente, JSON inválido ou regra violada retornam código 1;
+sucesso retorna 0. Não lê `.env`, não altera configs e não faz chamadas externas.
+
+O schema e o tipo `ClientConfig` ficam em `client-config-schema.ts`, junto da função
+`validateClientConfigs` para verificar IDs das pastas e duplicidade entre ativos.
+`check-clients.ts` cuida da leitura dos arquivos e dos erros na saída do comando.
+Zod é a dependência de validação prevista nas D009/D014 e no handoff da T015.
+
+Formato e regras: [clients/README.md](../clients/README.md#validação-automática).
+Testes: `npm test -- tests/client-config.test.ts`; fixtures apenas fictícias em
+`tests/fixtures/clients/`. A suíte completa também valida as configs atuais.

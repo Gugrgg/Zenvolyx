@@ -14,7 +14,7 @@ Automatiza captação, qualificação, agendamento e encaminhamento de leads com
 e CRM, com uma estrutura reutilizável entre clientes.
 
 - Premissas: n8n self-hosted (D006), WhatsApp pela API oficial da Meta (D007), CRM definido por cliente (D008).
-- Stack: Node.js 24 LTS + TypeScript, npm, Vitest e Biome (D009 aceita); Zod entra no primeiro payload externo.
+- Stack: Node.js 24 LTS + TypeScript, npm, Vitest e Biome (D009 aceita); Zod instalado na T015 para validar as configs de clientes e reutilizar nas entradas externas.
 - Testes: `npm test` (Vitest).
 - Lint/format: `npm run lint` (Biome, sem alterar arquivos).
 - Tipos: `npm run typecheck` (TypeScript, sem gerar arquivos).

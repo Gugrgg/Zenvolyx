@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "id": "cliente-ficticio",
+  "name": "Negócio Exemplo",
+  "active": true,
+  "timezone": "America/Sao_Paulo",
+  "whatsapp": {
+    "phoneNumberId": "000000000000001"
+  },
+  "crm": {
+    "provider": "google-sheets",
+    "settings": {
+      "spreadsheetId": "planilha-ficticia"
+    }
+  },
+  "calendar": {
+    "provider": "google-calendar",
+    "settings": {
+      "calendarId": "agenda-ficticia"
+    }
+  },
+  "scheduling": {
+    "durationMinutes": 30,
+    "minNoticeHours": 0,
+    "daysAhead": 7,
+    "serviceQuestion": "service",
+    "hours": {
+      "mon": ["09:00-12:00", "11:00-13:00"]
+    }
+  },
+  "qualification": {
+    "questions": [
+      {
+        "id": "service",
+        "text": "Qual serviço?",
+        "type": "choice",
+        "options": [
+          {
+            "id": "demo",
+            "label": "Demonstração"
+          },
+          {
+            "id": "other",
+            "label": "Outro"
+          }
+        ]
+      },
+      {
+        "id": "quantity",
+        "text": "Qual quantidade?",
+        "type": "number"
+      },
+      {
+        "id": "source",
+        "text": "Como nos conheceu?",
+        "type": "text"
+      }
+    ],
+    "rules": [
+      {
+        "question": "service",
+        "in": ["demo"]
+      },
+      {
+        "question": "quantity",
+        "min": 0,
+        "max": 10
+      }
+    ]
+  },
+  "ai": {
+    "enabled": false,
+    "knowledge": [
+      {
+        "topic": "Serviços",
+        "text": "Informação fictícia aprovada."
+      }
+    ]
+  },
+  "messages": {
+    "welcome": "Olá!",
+    "handoff": "Vamos chamar a equipe.",
+    "failure": "Tente mais tarde.",
+    "notQualified": "Obrigado!",
+    "chooseSlot": "Escolha um horário.",
+    "noSlots": "Sem horários.",
+    "booked": "Agendado: {slot}.",
+    "stopped": "Atendimento encerrado."
+  }
+}
