@@ -29,15 +29,22 @@ Formato (linhas de baixo são opcionais):
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ciclo de um workflow)
 - [ ] T014 Fazer `npm run lint` passar numa cópia do repositório no Windows (arquivos com CRLF), via `.gitattributes` ou config do Biome
   Sugerido: CODEX
+- [ ] T015 Criar o validador das configs de clientes (schema Zod da versão 1 e teste que valida todas as `clients/*/config.json`)
+  Depende: T006 | Sugerido: CODEX | Ref: clients/README.md, DECISIONS.md (D014)
+- [ ] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
+  Depende: T006, T012 | Sugerido: CODEX | Ref: clients/README.md (Como o n8n lê)
 
 ## Em andamento
 
-- [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão [CLAUDE]
-  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (D012)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
+  Ref: clients/README.md, DECISIONS.md (D014, substitui a D012)
+  Validação: modelo `clients/_template/config.json` conferido contra o formato documentado (script temporário); `npm test` e `npm run typecheck` passaram; `npm run lint` passou numa cópia LF, já incluindo o JSON novo; 6 links locais válidos. Validação automática das configs fica para a T015.
 
 - [x] T005 Desenhar arquitetura das automações (n8n, serviços, integrações) em docs/arquitetura/
   Ref: docs/arquitetura/visao-geral.md, DECISIONS.md (D011 a D013)
@@ -82,5 +89,19 @@ Arquivos principais:
 Próxima tarefa: T012
 Observações:
 - T012: `infra/` é pasta nova; registrar em DECISIONS.md e na seção 3 do AGENTS.md. Imagem do n8n com versão fixa; porta só em `127.0.0.1`; dados num volume; `N8N_ENCRYPTION_KEY`, `WEBHOOK_URL` e fuso `America/Sao_Paulo` via `.env`, com os nomes no `.env.example`. Retenção conforme D013 (ex.: `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, `EXECUTIONS_DATA_MAX_AGE=168`). Confirmar que a versão escolhida tem tabelas internas (Data tables). README em passos simples: o dono tem experiência básica com terminal (AGENTS.md, seção 4).
+- T012 (D014): montar `clients/` somente leitura no container, num caminho liberado para leitura de arquivos pelo n8n (ex.: `N8N_RESTRICT_FILE_ACCESS_TO`); o sub-workflow da T016 lê as configs dali.
 - T013: ainda não há workflows; validar com fixtures fictícias em `tests/fixtures/workflows/` (um limpo, um com `pinData`, um com token num parâmetro). O erro aponta arquivo e nó, sem imprimir o valor suspeito.
 - Nesta máquina não há Node no PATH; a validação da T005 usou o Node 24 do runtime do Codex.
+
+### Handoff T006
+Concluído:
+- formato da config de cliente (versão 1) em clients/README.md; modelo em clients/_template/
+- D014 substitui a D012: nós do n8n não escolhem credencial durante a execução
+Arquivos principais:
+- clients/README.md
+- clients/_template/config.json
+- DECISIONS.md (D014)
+Próxima tarefa: T015
+Observações:
+- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras. `crm` e `calendar` aceitam, por enquanto, qualquer `provider` em kebab-case e `settings` como objeto (T008 e T010 restringem). Configs inválidas de exemplo em `tests/fixtures/clients/`.
+- T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
