@@ -15,8 +15,6 @@ Formato (linhas de baixo são opcionais):
 - [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
   é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta.
   Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
-- [ ] T010 Definir abordagem de agendamento (contrato do conector de agenda e primeiro fornecedor) e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md
 - [ ] T011 Definir o uso de IA na conversa (papel, provedor, custo, limites de dados, áudio e Meta Business Agent) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md, DECISIONS.md (D013)
 - [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
@@ -42,7 +40,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T010 Definir abordagem de agendamento (contrato do conector de agenda e primeiro fornecedor) e registrar decisão [CLAUDE]
+  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md
 
 ## Concluído
 
