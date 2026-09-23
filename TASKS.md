@@ -12,9 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
-  é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta.
-  Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
 - [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
 - [ ] T013 Criar verificação automática dos workflows exportados (sem credenciais, tokens ou `pinData`) em `scripts/`, com testes
@@ -48,7 +45,9 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
+  é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta. [CLAUDE]
+  Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
 
 ## Concluído
 
