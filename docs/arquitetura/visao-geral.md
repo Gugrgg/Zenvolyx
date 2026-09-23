@@ -2,7 +2,7 @@
 
 Como as automações da Zenvolyx se encaixam: n8n, conectores, configuração por cliente e dados.
 O motivo de cada escolha está no [DECISIONS.md](../../DECISIONS.md) (D006 em diante); aqui fica só o desenho.
-Detalhes do WhatsApp: [whatsapp.md](whatsapp.md).
+Detalhes do WhatsApp: [whatsapp.md](whatsapp.md). Detalhes da IA: [ia.md](ia.md).
 
 ## Componentes
 
@@ -30,7 +30,7 @@ flowchart LR
 | Parte | Onde fica | Papel |
 |-------|-----------|-------|
 | Fluxos principais | `automations/<nome>/` | As etapas do lead (abaixo), em JSON exportado do n8n. |
-| Conectores | `integrations/<tipo>/<fornecedor>/` | Sub-workflows do n8n que falam com WhatsApp, CRM ou agenda. O contrato de entrada e saída de cada tipo fica em `integrations/<tipo>/README.md`; os fluxos chamam o contrato, nunca o fornecedor direto (D011). |
+| Conectores | `integrations/<tipo>/<fornecedor>/` | Sub-workflows do n8n que falam com WhatsApp, CRM, agenda ou IA. O contrato de entrada e saída de cada tipo fica em `integrations/<tipo>/README.md`; os fluxos chamam o contrato, nunca o fornecedor direto (D011). |
 | Config do cliente | `clients/<id>/config.json` | Tudo que muda por cliente: perguntas, regras de qualificação, mensagens e conectores usados, sem secrets (D014; formato no [clients/README.md](../../clients/README.md)). |
 | Credenciais | cofre do n8n | De preferência, uma credencial da agência por fornecedor, com acesso concedido pelo cliente (D014). Nunca no repositório. |
 | Serviços | `services/` | Código TypeScript só quando o n8n não resolver bem (D011). Nenhum previsto por enquanto. |
@@ -44,8 +44,8 @@ flowchart LR
    aqui; falha de envio gera alerta. Outras fontes de lead (formulário, anúncio) entram por fluxos
    de entrada próprios, que geram o mesmo evento interno.
 2. **Conversa e qualificação.** Lê o estado da conversa, decide o próximo passo pelas regras da
-   config e responde pelo conector de WhatsApp. Se houver IA (T011), ela interpreta a mensagem e
-   redige a resposta; quem decide se o lead está qualificado são as regras da config. O estado é
+   config e responde pelo conector de WhatsApp. Com IA (D019), ela interpreta a mensagem e responde
+   dúvidas pela base do cliente; quem decide se o lead está qualificado são as regras da config. O estado é
    salvo a cada passo.
 3. **Agendamento.** O lead qualificado escolhe entre horários vindos do conector de agenda. A IA
    nunca inventa horário, preço ou disponibilidade. Contrato em [integrations/calendar](../../integrations/calendar/README.md).
@@ -65,7 +65,7 @@ Regras em D013 e na seção 5 do [AGENTS.md](../../AGENTS.md). Na prática:
   interação.
 - Execução com sucesso não guarda dados; execução com erro guarda por poucos dias, para diagnóstico.
 - Alertas e logs trazem cliente, fluxo e erro, nunca telefone, nome ou texto de mensagem.
-- Com IA, o provedor recebe só o texto necessário para a etapa (critérios na T011).
+- Com IA, o provedor recebe só o texto necessário para a etapa, sem telefone, nome nem histórico (D019).
 
 ## Erros
 
@@ -104,7 +104,6 @@ A montagem do ambiente local é a T012.
 
 | Tarefa | Assunto |
 |--------|---------|
-| T011 | IA: papel na conversa, provedor, custo e limites de dados; inclui áudio e o Meta Business Agent |
 | T017 | WhatsApp: entrada de clientes reais (Tech Provider, cadastro incorporado, coexistência) |
 
 O que já está definido e falta construir (ambiente local, verificações, conectores e fluxos) está

@@ -34,6 +34,7 @@ Exemplo completo: [`_template/config.json`](_template/config.json).
 | `scheduling` | com `calendar` | Regras de horário: `durationMinutes`, `minNoticeHours` (antecedência mínima), `daysAhead` (até quantos dias à frente), `hours` (chaves `mon` a `sun`, cada uma com faixas `"HH:MM-HH:MM"`; dia ausente é dia fechado) e, opcional, `serviceQuestion` (pergunta `choice` cuja resposta vira o serviço do evento). |
 | `qualification.questions` | sim | Perguntas, na ordem em que são feitas: `id`, `text`, `type` (`text`, `choice` ou `number`) e, em `choice`, `options` com `id` e `label`: até 10 opções, `label` com até 20 caracteres (limites de botões e listas do WhatsApp). |
 | `qualification.rules` | sim | Condições para o lead ser qualificado; todas precisam valer, e lista vazia qualifica todos. Em `choice`: `{ "question": "service", "in": ["evaluation"] }`. Em `number`: `min` e/ou `max`. Pergunta `text` não entra em regra. |
+| `ai` | não | IA na conversa (D019): `enabled` (liga ou desliga) e `knowledge`, lista de `{ "topic", "text" }` com informações públicas do negócio que a IA pode usar para tirar dúvidas, até 6.000 caracteres no total. Sem `ai`, a conversa segue só com botões; detalhes em [integrations/ai](../integrations/ai/README.md). |
 | `messages` | sim | Textos fixos: `welcome` (primeira resposta), `handoff` (ao chamar a equipe) e `failure` (quando algo falha). |
 
 Regras do conteúdo:

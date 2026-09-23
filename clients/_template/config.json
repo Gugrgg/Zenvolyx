@@ -54,6 +54,23 @@
     ],
     "rules": [{ "question": "service", "in": ["evaluation", "cleaning"] }]
   },
+  "ai": {
+    "enabled": true,
+    "knowledge": [
+      {
+        "topic": "Endereço",
+        "text": "Rua Exemplo, 100, Centro, Cidade Exemplo."
+      },
+      {
+        "topic": "Formas de pagamento",
+        "text": "Pix, cartão de crédito e cartão de débito."
+      },
+      {
+        "topic": "Estacionamento",
+        "text": "Há estacionamento conveniado em frente à clínica."
+      }
+    ]
+  },
   "messages": {
     "welcome": "Olá! Você falou com a Clínica Exemplo. Vou fazer duas perguntas rápidas para te atender melhor.",
     "handoff": "Obrigado! Vou chamar alguém da nossa equipe para continuar com você.",

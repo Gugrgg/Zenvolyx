@@ -6,6 +6,8 @@ Desenho técnico das automações, serviços e integrações.
   ambientes e o que está em aberto (T005).
 - [WhatsApp](whatsapp.md): contas e acesso, entrada, rajadas, atendimento humano,
   templates, custos e limites da coexistência (T007).
+- [IA](ia.md): o que a IA faz e não faz, provedor, modelo, custo, dados, áudio e
+  avaliação (T011).
 
 Como usar: consultar os documentos conforme a tarefa e registrar decisões
 no [DECISIONS.md](../../DECISIONS.md), sem duplicá-las aqui.
