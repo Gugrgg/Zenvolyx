@@ -31,8 +31,8 @@ Regras da Meta conferidas em 2026-09 na documentação oficial (links no fim).
 - Descarta eventos repetidos pelo ID da mensagem (`wamid`); a Meta reenvia o que não confirmou.
 - Identifica o cliente pelo `metadata.phone_number_id` (D014) e o lead pelo BSUID
   (`from_user_id` / `user_id`). O telefone (`from` / `wa_id`) pode não vir, porque o usuário pode
-  usar nome de usuário; quando vem, segue só para o CRM. Se o lead trocar de número, o BSUID muda
-  e a conversa recomeça.
+  usar nome de usuário. Telefone e nome do perfil, quando vêm, seguem só para o CRM (D017). Se o
+  lead trocar de número, o BSUID muda e a conversa recomeça.
 - Status: `failed` gera alerta sem dados pessoais; os demais são ignorados.
 - Texto e respostas de botão ou lista seguem para a conversa. Outros tipos (áudio, imagem,
   localização) recebem a mensagem `handoff` e vão para a equipe, até a T011 decidir sobre áudio.
@@ -46,6 +46,7 @@ formato, com o próprio `channel` (valores fictícios):
   "channel": "whatsapp",
   "leadId": "BR.0000000000000000000",
   "phone": null,
+  "name": null,
   "messageIds": ["wamid.exemplo1", "wamid.exemplo2"],
   "type": "text",
   "text": "Oi\nQueria marcar uma avaliação",

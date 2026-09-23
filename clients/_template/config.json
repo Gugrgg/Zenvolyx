@@ -6,6 +6,10 @@
   "whatsapp": {
     "phoneNumberId": "000000000000000"
   },
+  "crm": {
+    "provider": "google-sheets",
+    "settings": { "spreadsheetId": "planilha-ficticia" }
+  },
   "qualification": {
     "questions": [
       {

@@ -28,7 +28,8 @@ Exemplo completo: [`_template/config.json`](_template/config.json).
 | `name` | sim | Nome do negócio, como aparece nas mensagens. |
 | `active` | sim | `false` faz a entrada ignorar o cliente. Modelos (pastas com `_`) ficam sempre `false`. |
 | `whatsapp.phoneNumberId` | sim | ID do número na Meta, em texto. A entrada acha o cliente por ele; não pode repetir entre clientes ativos. |
-| `crm`, `calendar` | não | Conector usado: `provider` (fornecedor, em kebab-case) e `settings` (IDs de recursos, nunca tokens). Fornecedores e settings válidos: T008 e T010. |
+| `crm` | sim | Onde o lead é gravado: `provider` e `settings` (IDs de recursos, nunca tokens). Hoje só `google-sheets`, com `settings.spreadsheetId`; detalhes em [integrations/crm](../integrations/crm/README.md). |
+| `calendar` | não | Agenda usada: `provider` (em kebab-case) e `settings` (IDs de recursos, nunca tokens). Fornecedores válidos na T010. |
 | `qualification.questions` | sim | Perguntas, na ordem em que são feitas: `id`, `text`, `type` (`text`, `choice` ou `number`) e, em `choice`, `options` com `id` e `label`: até 10 opções, `label` com até 20 caracteres (limites de botões e listas do WhatsApp). |
 | `qualification.rules` | sim | Condições para o lead ser qualificado; todas precisam valer, e lista vazia qualifica todos. Em `choice`: `{ "question": "service", "in": ["evaluation"] }`. Em `number`: `min` e/ou `max`. Pergunta `text` não entra em regra. |
 | `messages` | sim | Textos fixos: `welcome` (primeira resposta), `handoff` (ao chamar a equipe) e `failure` (quando algo falha). |
