@@ -13,17 +13,17 @@ Formato (linhas de baixo são opcionais):
 ## Backlog
 
 - [ ] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
-  Depende: T006, T012 | Sugerido: CODEX | Ref: clients/README.md (Como o n8n lê)
+  Depende: T006, T012 | Sugerido: CLAUDE | Ref: clients/README.md (Como o n8n lê)
 - [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
   Depende: T007 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Contas e acesso), DECISIONS.md (D015)
 - [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID)
   Depende: T007, T012 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md
 - [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
-  Depende: T007, T012, T016 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
+  Depende: T007, T012, T016 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
 - [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
-  Depende: T019 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
+  Depende: T019 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
 - [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone), com planilha modelo e passo a passo da conta de serviço do Google
-  Depende: T008, T012 | Sugerido: CODEX | Ref: integrations/crm/README.md, DECISIONS.md (D017)
+  Depende: T008, T012 | Sugerido: CLAUDE | Ref: integrations/crm/README.md, DECISIONS.md (D017)
 - [ ] T022 Criar o roteador `integrations/calendar/router/` (listSlots e book, com o cálculo de horários numa função testada) e o conector `integrations/calendar/google-calendar/` (ocupação e criação de evento pela conta de serviço)
   Depende: T010, T012 | Sugerido: CODEX | Ref: integrations/calendar/README.md, DECISIONS.md (D018)
 - [ ] T023 Especificar o lembrete antes do horário marcado (template de utilidade, antecedência e config), para depois da demo
@@ -35,7 +35,7 @@ Formato (linhas de baixo são opcionais):
 - [ ] T026 Escolher o serviço de transcrição de áudio (custo, LGPD e integração), para depois da demo
   Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
 - [ ] T027 Criar o fluxo de erro global e o sub-workflow `automations/alert/` (aviso por e-mail à agência, sem dados pessoais)
-  Depende: T012 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Erros), docs/arquitetura/demo.md
+  Depende: T012 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (Erros), docs/arquitetura/demo.md
 - [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe e pedido para parar, com o estado em tabela (D020)
   Depende: T016, T018, T019, T021, T024, T027 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), DECISIONS.md (D020)
 - [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado, confirmação e CRM `scheduled`
