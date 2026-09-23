@@ -140,3 +140,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T012
 Contexto: Materializar o ambiente já definido em D006, D013 e D014, com instruções simples para testes locais.
 Decisão: Adicionar `infra/` e usar Docker Compose em `infra/n8n/`: n8n 2.40.5, SQLite no volume `n8n_data`, porta publicada apenas em `127.0.0.1`, `clients/` montada somente leitura em `/files/clients` e restrição de leitura nesse caminho. Chave, URL de webhook e fusos vêm do `.env` da raiz. Cloudflare Quick Tunnel 2026.9.1 fica em perfil opcional, ligado só durante testes após criar o login do dono.
 Consequências: Sucessos, execuções manuais e progresso não são persistidos; erros ficam elegíveis para limpeza após 168 horas, com limite de 1.000 execuções. A limpeza é periódica; não elimina linhas das Data tables (limpeza da conversa fica na T028). O túnel muda de URL a cada recriação e torna a instância acessível publicamente durante o teste, sempre com login no editor. A chave e o volume precisam de backup conjunto.
+
+## D022 Workflows com ID fixo e export limpo
+Data: 2026-09-23 | Status: Aceita | Tarefa: T016
+Contexto: Fluxos chamam sub-workflows pelo ID. O export da CLI do n8n traz campos da instância: projeto e dono em `shared`, versões, datas e `pinData: null`, que a T013 bloqueia.
+Decisão: Cada workflow do repositório tem um `id` fixo e legível no JSON (ex.: `loadClientConfig`), mantido na importação, e quem chama usa esse ID. O JSON guardado tem só `id`, `name`, `nodes`, `connections`, `settings` e `active`. Sub-workflows ficam com `active: true` e são publicados depois de importar, porque o n8n 2.x só chama sub-workflow publicado.
+Consequências: A mesma referência vale em qualquer instância, local ou de produção. Depois de editar no n8n, o export precisa ser limpo antes do commit (automatizar na T031); publicar pela CLI exige reiniciar o n8n para valer no servidor.
