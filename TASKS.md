@@ -40,15 +40,20 @@ Formato (linhas de baixo são opcionais):
   Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
 - [ ] T030 Testar a demo de ponta a ponta com o dono e escrever o roteiro de apresentação
   Depende: T020, T025, T029 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md
+- [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas)
+  Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
 
 ## Em andamento
 
-- [ ] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config [CLAUDE]
-  Depende: T006, T012 | Sugerido: CLAUDE | Ref: clients/README.md (Como o n8n lê)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
+  Ref: automations/load-client-config/README.md, DECISIONS.md (D022)
+  Validação: no n8n 2.40.5 local, importado, publicado e executado por um workflow de teste com sete casos (ativo, inativo, duplicado, modelo, número desconhecido, vazio e ausente) sobre clientes fictícios temporários, removidos em seguida; o export limpo foi reimportado pelos comandos do README. `npm test` (124 testes, 12 da T016), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram.
 
 - [x] T015 Criar o validador das configs de clientes (schema Zod da versão 1 e teste que valida todas as `clients/*/config.json`)
   Ref: scripts/client-config-schema.ts, scripts/check-clients.ts, tests/client-config.test.ts, clients/README.md
@@ -128,31 +133,20 @@ Observações:
 - ...
 -->
 
-### Handoff T012
+### Handoff T016
 Concluído:
-- n8n local saudável, com login, Data tables e persistência testados; túnel HTTPS testado e desligado
-- `.env` local preservado, ignorado pelo Git; manter a chave existente
+- sub-workflow `loadClientConfig` em automations/load-client-config/, importado e publicado no n8n local; D022
+- tests/load-client-config.test.ts roda o código do nó com clientes fictícios
 Arquivos principais:
-- infra/n8n/compose.yaml
-- infra/n8n/README.md
-Próxima tarefa: T016
+- automations/load-client-config/workflow.json
+- automations/load-client-config/README.md
+Próxima tarefa: T019
 Observações:
-- Ler `/files/clients/*/config.json` pelo nó Read/Write Files from Disk; a montagem é somente leitura e esse é o diretório liberado para os nós de arquivo. Ignorar clientes inativos (D014).
-- Testar Data tables pelo servidor/editor ou webhook: nesta versão, `n8n execute` isolado não inicializou o módulo Data table; a execução pelo webhook funcionou. Os testes temporários da T012 foram removidos.
-- Docker Desktop está em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer numa sessão antiga, reabrir o terminal ou usar `resources/bin/docker.exe` dessa pasta.
-
-### Handoff T015
-Concluído:
-- schema Zod da config versão 1, verificação de todas as pastas e testes de regras/limites
-- comando `npm run check:clients`; `npm test` também valida as configs atuais
-Arquivos principais:
-- scripts/client-config-schema.ts
-- scripts/check-clients.ts
-- clients/README.md
-Próxima tarefa: T016
-Observações:
-- Ler as configs da pasta montada pela T012 e ignorar `active: false`. Sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
-- O validador roda no repositório; não instala Zod no container n8n. Validar configs antes de publicar. O modelo e a Zenvolyx continuam inativos; os IDs reais da demo ainda precisam substituir `PREENCHER` antes da ativação.
+- T019: chamar pelo nó Execute Workflow (fonte "Database", ID `loadClientConfig`, "Run once for each item") com `{ "phoneNumberId": <metadata.phone_number_id> }`. Com `found: false`, parar o fluxo; `found: false` ou `invalidConfigs` com itens geram aviso sem dados pessoais (T027; até lá, só log sem dados pessoais).
+- CLI do n8n dentro do container sempre com `-e N8N_RUNNERS_BROKER_PORT=5690`; importar despublica, então publicar e reiniciar o n8n depois (infra/n8n/README.md, seção 7). `n8n execute` não inicializa Data tables: testar fluxos com tabela pelo webhook.
+- Docker Desktop fica em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer, usar `resources/bin/docker.exe` dessa pasta.
+- O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
+- Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a Zenvolyx; `npm run check:clients` valida antes de publicar.
 
 ### Handoff T007
 Concluído:
