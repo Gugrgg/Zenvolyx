@@ -1,0 +1,8 @@
+{
+  "name": "Exemplo fictício com execução",
+  "nodes": [],
+  "connections": {},
+  "pinData": {
+    "Entrada fictícia": [{ "json": { "message": "DADO_FICTICIO_FIXADO" } }]
+  }
+}

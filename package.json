@@ -7,6 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "check:workflows": "node scripts/check-workflows.ts",
     "test": "vitest run",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit"

@@ -1,0 +1,20 @@
+{
+  "name": "Exemplo fictício com token",
+  "nodes": [
+    {
+      "name": "Requisição fictícia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0],
+      "parameters": {
+        "url": "https://example.invalid/messages",
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer TOKEN_FICTICIO_TESTE" }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {}
+}

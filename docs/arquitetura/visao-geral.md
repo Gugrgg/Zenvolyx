@@ -96,7 +96,7 @@ Arquivos e passo a passo do ambiente local (T012): [infra/n8n/README.md](../../i
 1. Editar no n8n local.
 2. Exportar o JSON para a pasta da automação ou do conector.
 3. Conferir: sem credenciais, tokens ou dados de execução (`pinData`) no JSON (verificação
-   automática na T013), fixture fictícia em `tests/fixtures/` e roteiro de verificação no README da pasta.
+   automática com `npm run check:workflows`, [detalhes](../../scripts/README.md#verificar-workflows-exportados)), fixture fictícia em `tests/fixtures/` e roteiro de verificação no README da pasta.
 4. Commit e merge (seção 10 do AGENTS.md).
 5. Importar na produção. As credenciais são criadas à mão em cada instância.
 

@@ -1,0 +1,14 @@
+{
+  "name": "Exemplo fictício limpo",
+  "nodes": [
+    {
+      "name": "Entrada fictícia",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    }
+  ],
+  "connections": {},
+  "active": false
+}
