@@ -74,3 +74,21 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T003
 Contexto: A estrutura prevista na seção 3 do AGENTS.md ainda não existia no repositório.
 Decisão: Materializar `automations/`, `integrations/`, `services/`, `scripts/`, `clients/`, `tests/` e `docs/`, incluindo `docs/arquitetura/` e `docs/comercial/`, com READMEs curtos de propósito, uso e validação.
 Consequências: As pastas ficam versionadas com orientações iniciais. Comandos executáveis e testes ficam para T004; o desenho da arquitetura e a estrutura por cliente continuam em T005 e T006.
+
+## D011 Fluxos no n8n, com conectores por contrato
+Data: 2026-09-23 | Status: Aceita | Tarefa: T005
+Contexto: A operação precisa ser simples para uma pessoa (D006), e CRM e agenda mudam de cliente para cliente (D008).
+Decisão: Todo fluxo de produção roda no n8n: fluxos principais em `automations/` e conectores como sub-workflows em `integrations/<tipo>/<fornecedor>/`. Cada tipo de conector (WhatsApp, CRM, agenda) tem um contrato de entrada e saída em `integrations/<tipo>/README.md`, e os fluxos chamam o contrato, nunca o fornecedor. TypeScript (D009) fica para ferramentas do repositório e para `services/` só quando o n8n não resolver bem.
+Consequências: Enquanto não houver serviço, a produção é só o container do n8n. Workflows são testados com fixtures e roteiro de verificação; ferramentas e serviços, com Vitest.
+
+## D012 Fluxos compartilhados entre clientes
+Data: 2026-09-23 | Status: Aceita | Tarefa: T005
+Contexto: Uma única instância do n8n atende todos os clientes (D006), e a estrutura precisa ser reutilizável.
+Decisão: Os fluxos são os mesmos para todos os clientes. A entrada identifica o cliente (ex.: pelo número de WhatsApp que recebeu a mensagem) e tudo que varia vem da config dele em `clients/<cliente>/` (formato na T006). Secrets ficam em credenciais do n8n, uma por cliente e serviço, que a config referencia pelo nome.
+Consequências: Cliente novo = config + credenciais, sem copiar fluxo. Fluxo exclusivo de um cliente é exceção e exige decisão registrada.
+
+## D013 O n8n guarda o mínimo de dados pessoais
+Data: 2026-09-23 | Status: Aceita | Tarefa: T005
+Contexto: Mensagens de leads são dados pessoais (LGPD), às vezes de saúde, e o n8n guarda o conteúdo de cada execução por padrão.
+Decisão: O registro do lead é o CRM do cliente. O n8n guarda só o estado da conversa e os IDs de mensagens processadas, em tabelas internas, com limpeza automática. Execuções com sucesso não guardam dados; com erro, guardam por poucos dias. Alertas e logs não levam dados pessoais.
+Consequências: Diagnosticar um fluxo que funcionou depende de fixtures e testes, não do histórico de execuções. A retenção é configurada no ambiente (T012).

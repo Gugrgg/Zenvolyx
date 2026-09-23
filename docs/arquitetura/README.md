@@ -1,7 +1,9 @@
 # Arquitetura
 
-Espaço para o desenho técnico das automações, serviços e integrações.
-O desenho inicial será produzido em T005.
+Desenho técnico das automações, serviços e integrações.
+
+- [Visão geral](visao-geral.md): componentes, caminho de um lead, dados, erros,
+  ambientes e o que está em aberto (T005).
 
 Como usar: consultar os documentos conforme a tarefa e registrar decisões
 no [DECISIONS.md](../../DECISIONS.md), sem duplicá-las aqui.

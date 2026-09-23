@@ -1,7 +1,8 @@
 # Serviços
 
 APIs pequenas e webhooks reutilizáveis, sem regras específicas de clientes.
-Ainda não há serviços implementados.
+Por padrão, fluxos e webhooks rodam no n8n; um serviço aqui só existe quando o
+n8n não resolver bem (D011). Ainda não há serviços implementados.
 
 Como rodar: seguir o README de cada serviço quando ele for criado, incluindo
 as variáveis necessárias (nomes em `.env.example`, valores em `.env`).
