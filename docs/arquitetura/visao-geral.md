@@ -48,7 +48,7 @@ flowchart LR
    redige a resposta; quem decide se o lead está qualificado são as regras da config. O estado é
    salvo a cada passo.
 3. **Agendamento.** O lead qualificado escolhe entre horários vindos do conector de agenda. A IA
-   nunca inventa horário, preço ou disponibilidade. Abordagem na T010.
+   nunca inventa horário, preço ou disponibilidade. Contrato em [integrations/calendar](../../integrations/calendar/README.md).
 4. **Registro e encaminhamento.** Cria ou atualiza o lead no CRM do cliente ([contrato](../../integrations/crm/README.md)) e avisa a
    equipe quando o caso pede atendimento humano. Quando um humano assume, a automação para de
    responder àquele lead.
@@ -104,7 +104,6 @@ A montagem do ambiente local é a T012.
 
 | Tarefa | Assunto |
 |--------|---------|
-| T010 | Agenda: contrato do conector, primeiro fornecedor e forma da credencial (D014) |
 | T011 | IA: papel na conversa, provedor, custo e limites de dados; inclui áudio e o Meta Business Agent |
 | T017 | WhatsApp: entrada de clientes reais (Tech Provider, cadastro incorporado, coexistência) |
 

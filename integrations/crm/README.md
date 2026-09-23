@@ -12,6 +12,7 @@ Um item JSON por chamada ao roteador (valores fictícios):
 {
   "action": "upsertLead",
   "clientId": "clinica-exemplo",
+  "timezone": "America/Sao_Paulo",
   "crm": {
     "provider": "google-sheets",
     "settings": { "spreadsheetId": "planilha-ficticia" }
@@ -34,12 +35,13 @@ Um item JSON por chamada ao roteador (valores fictícios):
 
 | Campo | Conteúdo |
 |-------|----------|
+| `timezone` | Fuso da config do cliente, usado para mostrar datas. |
 | `crm` | Seção `crm` da config do cliente, sem mudanças. |
 | `lead.id` | BSUID do lead (D016). |
 | `lead.phone`, `lead.name` | Telefone e nome do perfil do WhatsApp, quando vierem; senão `null`. |
 | `lead.stage` | `talking` (em conversa), `qualified`, `not_qualified`, `scheduled` ou `with_team`. |
 | `lead.answers` | Perguntas feitas e respostas dadas, com os textos da config. |
-| `lead.appointment` | Horário marcado, quando houver; formato na T010. |
+| `lead.appointment` | Horário marcado, quando houver: `{ "start", "end", "service" }`, com datas em ISO 8601 (UTC) e `service` podendo ser `null` (D018). |
 | `lead.firstContactAt`, `lead.lastContactAt` | Datas em ISO 8601, em UTC. |
 
 ## Saída
@@ -73,8 +75,8 @@ Um item JSON por chamada ao roteador (valores fictícios):
 - Colunas da aba `Leads`, nesta ordem: Nome, Telefone, Etapa, Respostas, Agendamento, Canal,
   Primeiro contato, Último contato, ID do lead.
 - Etapa em português: Em conversa, Qualificado, Não qualificado, Agendado, Com a equipe. Respostas:
-  uma linha por pergunta, no formato "pergunta: resposta". Datas no horário de Brasília, até a T010
-  definir fuso por cliente.
+  uma linha por pergunta, no formato "pergunta: resposta". Agendamento como "dd/mm/aaaa hh:mm
+  (serviço)". Datas no fuso do cliente (`timezone`).
 
 ### Outros CRMs
 
