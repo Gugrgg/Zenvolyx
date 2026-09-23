@@ -3,12 +3,30 @@
   "id": "_template",
   "name": "Clínica Exemplo",
   "active": false,
+  "timezone": "America/Sao_Paulo",
   "whatsapp": {
     "phoneNumberId": "000000000000000"
   },
   "crm": {
     "provider": "google-sheets",
     "settings": { "spreadsheetId": "planilha-ficticia" }
+  },
+  "calendar": {
+    "provider": "google-calendar",
+    "settings": { "calendarId": "agenda-ficticia@group.calendar.google.com" }
+  },
+  "scheduling": {
+    "durationMinutes": 60,
+    "minNoticeHours": 2,
+    "daysAhead": 14,
+    "serviceQuestion": "service",
+    "hours": {
+      "mon": ["09:00-12:00", "14:00-18:00"],
+      "tue": ["09:00-12:00", "14:00-18:00"],
+      "wed": ["09:00-12:00", "14:00-18:00"],
+      "thu": ["09:00-12:00", "14:00-18:00"],
+      "fri": ["09:00-12:00", "14:00-18:00"]
+    }
   },
   "qualification": {
     "questions": [
@@ -23,12 +41,14 @@
         ]
       },
       {
-        "id": "period",
-        "text": "Qual período é melhor para você?",
+        "id": "source",
+        "text": "Como você conheceu a clínica?",
         "type": "choice",
         "options": [
-          { "id": "morning", "label": "Manhã" },
-          { "id": "afternoon", "label": "Tarde" }
+          { "id": "instagram", "label": "Instagram" },
+          { "id": "google", "label": "Google" },
+          { "id": "referral", "label": "Indicação" },
+          { "id": "other", "label": "Outro" }
         ]
       }
     ],

@@ -83,7 +83,7 @@ são mais claras e custam menos (ver Custos).
 - Envio pelo BSUID (campo `recipient`), que funciona com ou sem telefone.
 - Fora da janela (lembrete, retorno): só template aprovado na conta do cliente, na categoria
   utilidade sempre que possível. Os templates entram na config quando a primeira automação precisar
-  (lembretes: T010).
+  (lembretes: T023).
 
 ## Custos
 

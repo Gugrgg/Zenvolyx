@@ -15,8 +15,6 @@ Formato (linhas de baixo são opcionais):
 - [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
   é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta.
   Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
-- [ ] T010 Definir abordagem de agendamento (contrato do conector de agenda e primeiro fornecedor) e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md
 - [ ] T011 Definir o uso de IA na conversa (papel, provedor, custo, limites de dados, áudio e Meta Business Agent) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md, DECISIONS.md (D013)
 - [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
@@ -39,6 +37,10 @@ Formato (linhas de baixo são opcionais):
   Depende: T019 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
 - [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone), com planilha modelo e passo a passo da conta de serviço do Google
   Depende: T008, T012 | Sugerido: CODEX | Ref: integrations/crm/README.md, DECISIONS.md (D017)
+- [ ] T022 Criar o roteador `integrations/calendar/router/` (listSlots e book, com o cálculo de horários numa função testada) e o conector `integrations/calendar/google-calendar/` (ocupação e criação de evento pela conta de serviço)
+  Depende: T010, T012 | Sugerido: CODEX | Ref: integrations/calendar/README.md, DECISIONS.md (D018)
+- [ ] T023 Especificar o lembrete antes do horário marcado (template de utilidade, antecedência e config), para depois da demo
+  Depende: T010 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
 
 ## Em andamento
 
@@ -47,6 +49,10 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T010 Definir abordagem de agendamento (contrato do conector de agenda e primeiro fornecedor) e registrar decisão
+  Ref: integrations/calendar/README.md, DECISIONS.md (D018)
+  Validação: limites do Google conferidos em 2026-09 (conta de serviço não convida pessoas; o nó Google Calendar do n8n não aceita conta de serviço); modelo com fuso, agenda e expediente conferido por script temporário, com o exemplo do contrato; `npm test` e `npm run typecheck` passaram; `npm run lint` passou numa cópia LF; 13 links locais válidos.
 
 - [x] T008 Definir abordagem de integração com CRM e registrar decisão
   Ref: integrations/crm/README.md, DECISIONS.md (D017)
@@ -117,7 +123,7 @@ Arquivos principais:
 - DECISIONS.md (D014)
 Próxima tarefa: T015
 Observações:
-- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `calendar` segue aceitando qualquer `provider` em kebab-case e `settings` como objeto até a T010. Configs inválidas de exemplo em `tests/fixtures/clients/`.
+- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` é obrigatório, com `provider` `google-sheets` e `settings.spreadsheetId` em texto não vazio (T008); `timezone` obrigatório e válido (IANA); `calendar` opcional, com `provider` `google-calendar` e `settings.calendarId`; com `calendar`, `scheduling` obrigatório: `durationMinutes` e `daysAhead` inteiros positivos, `minNoticeHours` maior ou igual a zero, `hours` só com chaves `mon` a `sun` e faixas `HH:MM-HH:MM` crescentes e sem sobreposição, e `serviceQuestion` (opcional) apontando para pergunta `choice` (T010). Configs inválidas de exemplo em `tests/fixtures/clients/`.
 - T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
 
 ### Handoff T007
@@ -146,3 +152,17 @@ Observações:
 - T021: README com passo a passo simples para o dono criar a conta de serviço no Google Cloud (com a Sheets API ativada) e cadastrar a credencial no n8n; a chave JSON fica só no n8n. Cabeçalho da aba `Leads` num CSV modelo em `integrations/crm/google-sheets/`, para importar numa planilha nova.
 - T021: fixtures fictícias em `tests/fixtures/crm/`: lead novo, atualização pelo BSUID, BSUID novo com o mesmo telefone e fornecedor desconhecido.
 - T019: o evento da entrada ganhou `name` (nome do perfil do WhatsApp, opcional), que vai para o CRM (docs/arquitetura/whatsapp.md).
+
+### Handoff T010
+Concluído:
+- contrato da agenda em integrations/calendar/README.md; D018
+- config com `timezone` obrigatório, `calendar` e `scheduling`; o contrato do CRM recebe `timezone` e o formato de `appointment`
+Arquivos principais:
+- integrations/calendar/README.md
+- DECISIONS.md (D018)
+Próxima tarefa: T022
+Observações:
+- T022: cálculo de horários numa função pura em JS, testada com Vitest (fuso, expediente com intervalo, antecedência mínima, dias à frente, ocupação); o Code node do n8n usa o mesmo código, e um teste confere que os dois são iguais.
+- T022: Calendar API pelo nó HTTP Request com a credencial de conta de serviço (escopo de Calendar): consulta de ocupação e criação de evento com `extendedProperties.private` (`leadId` e marca da Zenvolyx), sem `attendees`. README com passo a passo para o cliente compartilhar a agenda ("Fazer alterações nos eventos") e achar o `calendarId`.
+- T022: fixtures fictícias em `tests/fixtures/calendar/`: expediente com almoço, compromisso ocupando horário, antecedência mínima e horário tomado entre `listSlots` e `book`.
+- T021: o contrato do CRM agora recebe `timezone`; datas e agendamento na planilha nesse fuso.
