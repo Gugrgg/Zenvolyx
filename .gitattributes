@@ -1,0 +1,3 @@
+# Manter arquivos de texto em LF também no checkout do Windows.
+# A detecção automática preserva arquivos binários.
+* text=auto eol=lf

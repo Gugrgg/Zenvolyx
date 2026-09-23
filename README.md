@@ -20,6 +20,11 @@ Depois da instalação, execute na raiz:
 Para corrigir formatação e imports, use `npm exec -- biome check --write .` e
 revise as alterações. As três verificações acima devem passar antes de integrar mudanças.
 
+O [.gitattributes](.gitattributes) mantém arquivos de texto com finais de linha LF
+também no Windows, alinhados ao Biome, mesmo com `core.autocrlf=true`.
+Em cópias antigas com CRLF, `npm exec -- biome format --write .` normaliza a
+formatação dos arquivos verificados; depois execute `npm run lint`.
+
 O código usa módulos ESM (`"type": "module"`) e pode executar arquivos `.ts`
 diretamente no Node, sem build. Use extensões `.ts` nos imports locais e
 `import type` para tipos; não use sintaxe que exija transformação, como enums.
