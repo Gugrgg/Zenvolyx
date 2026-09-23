@@ -64,4 +64,3 @@ Observações:
 - D006 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
 - T004: `package.json` com scripts `test` (vitest run), `lint` (biome check), `typecheck` (tsc --noEmit); `"engines": {"node": ">=24"}`; tsconfig com `strict`, `noEmit`, `erasableSyntaxOnly`, `allowImportingTsExtensions`, `module`/`moduleResolution` `nodenext`.
 - Zod só entra quando surgir o primeiro payload externo; framework HTTP fica para o primeiro endpoint.
-- Sem Git ainda (T001 pendente): nada foi commitado.
