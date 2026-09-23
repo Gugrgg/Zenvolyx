@@ -8,11 +8,13 @@ O estado real do projeto está no repositório. Histórico de conversa não é m
 
 ## 1. Projeto
 
-<!-- PREENCHER/AJUSTAR: 2–4 linhas. O que é, para quem, qual problema resolve. -->
-Automações para clientes: captação, qualificação e encaminhamento de leads usando n8n,
-WhatsApp e CRM, com uma estrutura reutilizável entre clientes.
+**Zenvolyx**: agência de automação com IA para negócios de serviço que vendem pelo WhatsApp
+e trabalham com agendamento (clínicas, escritórios, cursos, academias etc.).
+Automatiza captação, qualificação, agendamento e encaminhamento de leads com n8n, WhatsApp
+e CRM, com uma estrutura reutilizável entre clientes.
 
-- Stack: n8n self-hosted (Docker) + Node.js 24 LTS + TypeScript, npm, Vitest, Biome, Zod (ver D006)
+- Premissas: n8n self-hosted (D006), WhatsApp pela API oficial da Meta (D007), CRM definido por cliente (D008).
+- Stack: _definir em T002_ <!-- ex.: Node.js 20 + TypeScript -->
 - Testes: _definir em T004_ <!-- ex.: `npm test` -->
 - Lint/format: _definir em T004_ <!-- ex.: `npm run lint` -->
 
@@ -64,6 +66,8 @@ Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 - Não adicionar dependência sem necessidade; justificar no commit (e em `DECISIONS.md` se for estrutural).
 - Não mexer em arquivos de tarefa em andamento do outro agente.
 - Dúvida que muda escopo ou arquitetura: parar e perguntar ao usuário.
+- O usuário tem experiência básica com terminal, Git e servidores: antes de pedir que ele rode
+  um comando, explicar o que o comando faz. Preferir sempre a configuração mais simples.
 
 ## 5. Padrões
 
@@ -81,6 +85,8 @@ Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 - Antes de commitar JSON do n8n, conferir que não há credencial ou token embutido.
 - Dados de leads e clientes são dados pessoais (LGPD): nunca usar dados reais em testes, fixtures, logs ou exemplos.
 - Não logar payload completo com telefone, e-mail, CPF etc.
+- Clientes da área de saúde: dado de saúde é sensível (LGPD). Automações coletam só o necessário
+  para qualificar e agendar (ex.: tratamento de interesse, horário), nunca histórico clínico.
 - Secret encontrado no histórico do Git: parar e avisar o usuário. Não reescrever histórico por conta própria.
 
 **Testes**

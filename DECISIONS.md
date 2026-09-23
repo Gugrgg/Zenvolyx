@@ -45,8 +45,20 @@ Contexto: Handoffs precisam estar onde os agentes já leem no início da sessão
 Decisão: Seção "Handoffs" no fim de TASKS.md; cada handoff é removido quando a próxima tarefa é concluída.
 Consequências: Nenhum arquivo extra para ler; TASKS.md não cresce indefinidamente.
 
-## D006 Stack: n8n self-hosted + Node.js 24 LTS com TypeScript
-Data: 2026-09-23 | Status: Proposta (aguarda confirmação do usuário) | Tarefa: T002
-Contexto: Precisamos de uma stack única para `services/`, `integrations/` e `scripts/`, próxima do n8n e com poucas dependências.
-Decisão: Orquestração no n8n self-hosted (Docker Compose, banco Postgres). Código em Node.js 24 LTS + TypeScript `strict`, pacote único na raiz com npm (sem monorepo). TS roda direto no Node (type stripping: `erasableSyntaxOnly`, imports com `.ts`); `tsc --noEmit` só para checagem de tipos. Testes com Vitest; lint e format com Biome; validação de payload externo com Zod; `.env` lido com `node --env-file` (sem dotenv). Framework HTTP só é escolhido quando surgir o primeiro endpoint.
-Consequências: Mesma linguagem dos Code nodes do n8n e poucas dependências (typescript, vitest, biome, zod). Comandos-alvo para T004: `npm test`, `npm run lint`, `npm run typecheck`. Sem enums/namespaces de TS por causa do type stripping.
+## D006 n8n self-hosted, começando no computador local
+Data: 2026-09-23 | Status: Aceita | Tarefa: — (definido pelo dono)
+Contexto: O custo inicial precisa ser zero. O n8n Community Edition é gratuito quando auto-hospedado; o n8n Cloud é pago.
+Decisão: Desenvolver com o n8n no computador local (Docker). No primeiro cliente, migrar para Oracle Cloud Always Free ou VPS barata (decidir nesse momento). Clientes nunca acessam o n8n: recebem só os resultados das automações.
+Consequências: Webhooks locais precisam de túnel (ex.: Cloudflare Tunnel). A licença permite o modelo de agência se o cliente não acessa o n8n; antes do primeiro cliente, confirmar com license@n8n.io o caso de guardar credenciais de clientes na nossa instância.
+
+## D007 WhatsApp pela API oficial da Meta
+Data: 2026-09-23 | Status: Aceita | Tarefa: — (definido pelo dono)
+Contexto: APIs não oficiais (Evolution API, Z-API) são mais baratas, mas violam os termos do WhatsApp e arriscam o banimento do número do cliente.
+Decisão: Usar a WhatsApp Business Platform (Cloud API) oficial, desenvolvendo com o número de teste gratuito da Meta. O custo das mensagens é repassado ao cliente; a forma (conta do cliente ou da agência) se define em T007.
+Consequências: Mensagem iniciada pela empresa exige template aprovado, e marketing é a categoria mais cara. A partir de 2026-10-01, respostas dentro da janela de 24h também são cobradas: priorizar fluxos em que o lead inicia a conversa.
+
+## D008 CRM definido por cliente
+Data: 2026-09-23 | Status: Aceita | Tarefa: — (definido pelo dono)
+Contexto: Cada cliente pode já usar um CRM diferente, ou só planilha e WhatsApp.
+Decisão: Não adotar um CRM padrão. Integrar com o que o cliente usa; para quem não usa nenhum, Google Sheets ou um CRM gratuito. O padrão de integração se define em T008.
+Consequências: A integração com CRM precisa ser plugável: cada CRM novo vira um conector novo, não um fluxo novo.

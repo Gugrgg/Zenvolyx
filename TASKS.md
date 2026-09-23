@@ -20,10 +20,13 @@ Formato (linhas de baixo são opcionais):
   Depende: T002 | Sugerido: CLAUDE
 - [ ] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE
-- [ ] T007 Definir abordagem de integração com WhatsApp e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE
+- [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
+  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D007)
 - [ ] T008 Definir abordagem de integração com CRM e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE
+  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008)
+- [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
+  é qualificado, agendado e registrado no CRM) e quebrar em tarefas de implementação. Prioridade alta.
+  Depende: T006, T007, T008 | Sugerido: CLAUDE
 
 ## Em andamento
 

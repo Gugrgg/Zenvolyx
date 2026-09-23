@@ -1,6 +1,8 @@
-# Projeto de automações
+# Zenvolyx
 
-<!-- PREENCHER: nome do projeto e 1–2 linhas de descrição. -->
+Agência de automação com IA para negócios de serviço que vendem pelo WhatsApp e trabalham
+com agendamento. Este repositório reúne as automações (n8n), as integrações (WhatsApp, CRM)
+e a configuração de cada cliente.
 
 ## Trabalhando com agentes
 
