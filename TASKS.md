@@ -40,6 +40,7 @@ _(vazio)_
   Validação: 15 casos de ignore, `.env.example` vazio e `git diff --cached --check` passaram.
   Remoto: `origin` configurado para `https://github.com/Gugrgg/Zenvolyx.git`; sem push, pois a consulta retornou `Repository not found`.
 - [x] T002 Propor stack (linguagem, runtime, testes, lint) e registrar em DECISIONS.md
+  Ref: DECISIONS.md (D009)
 - [x] T000 Criar estrutura de contexto (AGENTS, CLAUDE, CODEX, TASKS, DECISIONS, README)
 
 ## Handoffs
@@ -59,11 +60,12 @@ Observações:
 
 ### Handoff T002
 Concluído:
-- stack proposta em D006 (DECISIONS.md) e linha "Stack" da seção 1 do AGENTS.md preenchida
+- stack do código proposta em D009 (DECISIONS.md) e linha "Stack" da seção 1 do AGENTS.md preenchida
 Arquivos principais:
-- DECISIONS.md (D006)
+- DECISIONS.md (D009)
 Próxima tarefa: T004
 Observações:
-- D006 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
+- D009 está como "Proposta": confirmar com o usuário antes de instalar dependências. Se aceita, trocar o status para "Aceita".
+- O n8n não entra na T004: segue a D006 (local, Docker, configuração mais simples).
 - T004: `package.json` com scripts `test` (vitest run), `lint` (biome check), `typecheck` (tsc --noEmit); `"engines": {"node": ">=24"}`; tsconfig com `strict`, `noEmit`, `erasableSyntaxOnly`, `allowImportingTsExtensions`, `module`/`moduleResolution` `nodenext`.
 - Zod só entra quando surgir o primeiro payload externo; framework HTTP fica para o primeiro endpoint.
