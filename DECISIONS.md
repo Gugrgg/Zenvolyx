@@ -98,3 +98,15 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T006
 Contexto: Substitui a D012, que previa uma credencial do n8n por cliente citada pelo nome na config. Os nós do n8n não escolhem credencial durante a execução, então isso obrigaria a copiar fluxos por cliente.
 Decisão: Os fluxos seguem os mesmos para todos os clientes. Cada cliente tem `clients/<id>/config.json` (formato no `clients/README.md`), sem secrets e sem dados pessoais, que o n8n lê de uma pasta montada somente leitura; a entrada acha o cliente ativo pelo `whatsapp.phoneNumberId`. Cada fornecedor usa, de preferência, uma credencial da agência com acesso concedido pelo cliente, e a config guarda só IDs de recursos; credencial por cliente só quando o fornecedor exigir, na forma definida pela tarefa do conector.
 Consequências: Cliente novo é pasta nova mais acessos concedidos, sem copiar fluxo. Config alterada vale depois do commit e da atualização da pasta no servidor, sem reiniciar o n8n.
+
+## D015 WhatsApp: número do cliente, agência como Tech Provider
+Data: 2026-09-23 | Status: Aceita | Tarefa: T007
+Contexto: A D007 definiu a Cloud API, mas não de quem é a conta. A Meta só deixa parceiros operarem contas que o cliente compartilha, e a coexistência (app WhatsApp Business e API no mesmo número) exige que o parceiro seja Tech Provider.
+Decisão: Cada cliente é dono do número e da conta (WABA) e paga as mensagens na Meta. Ele conecta o número pelo cadastro incorporado (Embedded Signup v4) com coexistência e continua usando o app. A Zenvolyx vira Tech Provider e usa uma credencial única (usuário do sistema) para todas as contas compartilhadas (D014). Desenvolvimento e demo usam o app da agência com o número de teste.
+Consequências: Antes do primeiro cliente real, a agência precisa de verificação na Meta, app aprovado com acesso avançado e página de cadastro (T017). O cliente pode sair levando o número.
+
+## D016 Entrada do WhatsApp: webhook único, BSUID, rajadas e pausa humana
+Data: 2026-09-23 | Status: Aceita | Tarefa: T007
+Contexto: Todos os clientes chegam pelo mesmo webhook do app; desde 2026 o telefone do lead pode vir oculto (nomes de usuário); leads mandam mensagens em sequência; e a equipe do cliente responde pelo app.
+Decisão: Um webhook no n8n responde na hora, valida a assinatura, descarta repetidos e identifica o cliente (`phone_number_id`) e o lead (BSUID). Mensagens do mesmo lead são agrupadas após alguns segundos de silêncio. Mensagem da equipe pelo app (`smb_message_echoes`) ou chamada da equipe pausa a automação para aquele lead por 24 h.
+Consequências: O lead é identificado pelo BSUID em todo o sistema; o telefone é opcional e só vai para o CRM. Tipos que a automação não entende (áudio, imagem) vão para a equipe até a T011.
