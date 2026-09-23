@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D007), docs/arquitetura/visao-geral.md
 - [ ] T008 Definir abordagem de integração com CRM e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008), docs/arquitetura/visao-geral.md
 - [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
@@ -36,7 +34,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão [CLAUDE]
+  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D007), docs/arquitetura/visao-geral.md
 
 ## Concluído
 
