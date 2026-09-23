@@ -4,6 +4,8 @@ Desenho técnico das automações, serviços e integrações.
 
 - [Visão geral](visao-geral.md): componentes, caminho de um lead, dados, erros,
   ambientes e o que está em aberto (T005).
+- [WhatsApp](whatsapp.md): contas e acesso, entrada, rajadas, atendimento humano,
+  templates, custos e limites da coexistência (T007).
 
 Como usar: consultar os documentos conforme a tarefa e registrar decisões
 no [DECISIONS.md](../../DECISIONS.md), sem duplicá-las aqui.

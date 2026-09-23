@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
-  Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D007), docs/arquitetura/visao-geral.md
 - [ ] T008 Definir abordagem de integração com CRM e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: DECISIONS.md (D008), docs/arquitetura/visao-geral.md
 - [ ] T009 Especificar a demo da Zenvolyx (a própria agência como cliente: lead chama no WhatsApp,
@@ -21,7 +19,7 @@ Formato (linhas de baixo são opcionais):
   Depende: T006, T007, T008, T010, T011 | Sugerido: CLAUDE
 - [ ] T010 Definir abordagem de agendamento (contrato do conector de agenda e primeiro fornecedor) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md
-- [ ] T011 Definir o uso de IA na conversa (papel, provedor, custo e limites de dados) e registrar decisão
+- [ ] T011 Definir o uso de IA na conversa (papel, provedor, custo, limites de dados, áudio e Meta Business Agent) e registrar decisão
   Depende: T005 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md, DECISIONS.md (D013)
 - [ ] T012 Montar o n8n local com Docker em `infra/n8n/` (versão fixa, `.env`, túnel, retenção de execuções), com passo a passo no README
   Depende: T005 | Sugerido: CODEX | Ref: docs/arquitetura/visao-geral.md (Ambientes), DECISIONS.md (D006, D013)
@@ -33,6 +31,14 @@ Formato (linhas de baixo são opcionais):
   Depende: T006 | Sugerido: CODEX | Ref: clients/README.md, DECISIONS.md (D014)
 - [ ] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
   Depende: T006, T012 | Sugerido: CODEX | Ref: clients/README.md (Como o n8n lê)
+- [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
+  Depende: T007 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Contas e acesso), DECISIONS.md (D015)
+- [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID)
+  Depende: T007, T012 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md
+- [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
+  Depende: T007, T012, T016 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
+- [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
+  Depende: T019 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
 
 ## Em andamento
 
@@ -41,6 +47,10 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T007 Definir abordagem de integração com WhatsApp (API oficial) e registrar decisão
+  Ref: docs/arquitetura/whatsapp.md, integrations/whatsapp/README.md, DECISIONS.md (D015, D016)
+  Validação: regras da Meta conferidas na documentação oficial em 2026-09 (coexistência, BSUID, preços, tokens); `npm test` e `npm run typecheck` passaram; `npm run lint` passou numa cópia LF; 13 links locais e 4 externos válidos.
 
 - [x] T006 Definir estrutura reutilizável de clientes (clients/) e registrar decisão
   Ref: clients/README.md, DECISIONS.md (D014, substitui a D012)
@@ -103,5 +113,19 @@ Arquivos principais:
 - DECISIONS.md (D014)
 Próxima tarefa: T015
 Observações:
-- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras. `crm` e `calendar` aceitam, por enquanto, qualquer `provider` em kebab-case e `settings` como objeto (T008 e T010 restringem). Configs inválidas de exemplo em `tests/fixtures/clients/`.
+- T015: adicionar `zod` (previsto na D009) e justificar no commit. Schema e verificação em `scripts/`, teste em `tests/`. Além dos campos: `id` igual ao nome da pasta; pasta com `_` é modelo e fica com `active: false`; `phoneNumberId` único entre clientes ativos; ids de perguntas e de opções únicos; regra só cita pergunta e opção que existem; `min`/`max` só em pergunta `number`; pergunta `text` fora das regras; até 10 opções por pergunta e `label` com até 20 caracteres (limites do WhatsApp). `crm` e `calendar` aceitam, por enquanto, qualquer `provider` em kebab-case e `settings` como objeto (T008 e T010 restringem). Configs inválidas de exemplo em `tests/fixtures/clients/`.
 - T016: ler as configs da pasta montada pela T012 (ver Handoff T005); ignorar `active: false`; sem cliente para o `phoneNumberId`, parar e alertar sem dados pessoais (D013). Fixture fictícia e roteiro de verificação no README da automação.
+
+### Handoff T007
+Concluído:
+- abordagem do WhatsApp em docs/arquitetura/whatsapp.md; contrato do conector em integrations/whatsapp/README.md
+- D015 (número do cliente, agência como Tech Provider, coexistência) e D016 (webhook único, BSUID, rajadas, pausa humana)
+Arquivos principais:
+- docs/arquitetura/whatsapp.md
+- integrations/whatsapp/README.md
+Próxima tarefa: T018
+Observações:
+- O lead é identificado pelo BSUID (`from_user_id` / `user_id`); o telefone pode não vir. Envio pelo campo `recipient`.
+- T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição.
+- T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013).
+- O número de teste da Meta não usa o app, então não gera `smb_message_echoes`: a pausa por eco da equipe só é testada com fixture até existir cliente em coexistência (T017).

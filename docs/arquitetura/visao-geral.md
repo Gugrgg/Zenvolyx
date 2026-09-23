@@ -2,6 +2,7 @@
 
 Como as automações da Zenvolyx se encaixam: n8n, conectores, configuração por cliente e dados.
 O motivo de cada escolha está no [DECISIONS.md](../../DECISIONS.md) (D006 em diante); aqui fica só o desenho.
+Detalhes do WhatsApp: [whatsapp.md](whatsapp.md).
 
 ## Componentes
 
@@ -103,11 +104,10 @@ A montagem do ambiente local é a T012.
 
 | Tarefa | Assunto |
 |--------|---------|
-| T007 | WhatsApp: conta do cliente ou da agência e acesso ao número (D014), webhook, mensagens em rajada, atendimento humano |
 | T008 | CRM: contrato do conector, primeiros fornecedores e forma da credencial (D014) |
 | T010 | Agenda: contrato do conector, primeiro fornecedor e forma da credencial (D014) |
-| T011 | IA: papel na conversa, provedor, custo e limites de dados |
-| T012 | Ambiente local do n8n (Docker, túnel, retenção de dados) |
-| T013 | Verificação automática dos workflows exportados |
-| T015 | Validador das configs de clientes |
-| T016 | Sub-workflow que carrega a config do cliente |
+| T011 | IA: papel na conversa, provedor, custo e limites de dados; inclui áudio e o Meta Business Agent |
+| T017 | WhatsApp: entrada de clientes reais (Tech Provider, cadastro incorporado, coexistência) |
+
+O que já está definido e falta construir (ambiente local, verificações, conectores e fluxos) está
+no [TASKS.md](../../TASKS.md).
