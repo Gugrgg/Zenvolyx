@@ -5,6 +5,8 @@ ID fixo e export limpo (D022).
 
 - [load-client-config](load-client-config/README.md): acha o cliente ativo pelo número
   de WhatsApp e devolve a config (T016).
+- [whatsapp-inbound](whatsapp-inbound/README.md): entrada do WhatsApp, com verificação da
+  Meta, assinatura, deduplicação e cliente identificado (T019).
 
 Como rodar: seguir o README da pasta para importar e publicar o workflow no n8n
 local (Docker, D006; [comandos da CLI](../infra/n8n/README.md#7-comandos-da-cli-do-n8n)).

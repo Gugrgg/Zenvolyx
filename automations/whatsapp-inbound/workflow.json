@@ -1,0 +1,458 @@
+{
+  "id": "waInboundWebhook",
+  "name": "WhatsApp inbound",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e3b0c442-0001-4f19-9a19-000000000001",
+      "name": "Meta verification request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -400],
+      "webhookId": "5f3c2a1e-7b64-4d19-8e21-a9c0d4b6e101"
+    },
+    {
+      "parameters": {},
+      "id": "e3b0c442-0002-4f19-9a19-000000000002",
+      "name": "Show verify token for Meta",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, -250]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "zenvolyx-whatsapp-webhook",
+        "dataPropertyName": "expectedToken",
+        "encoding": "hex"
+      },
+      "id": "e3b0c442-0003-4f19-9a19-000000000003",
+      "name": "Derive verify token (HMAC)",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [220, -325]
+    },
+    {
+      "parameters": {
+        "jsCode": "const CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;\n\nfunction sameText(received, expected) {\n  if (typeof received !== 'string' || typeof expected !== 'string' || received.length !== expected.length) {\n    return false;\n  }\n  let difference = 0;\n  for (let index = 0; index < expected.length; index++) {\n    difference |= received.charCodeAt(index) ^ expected.charCodeAt(index);\n  }\n  return difference === 0;\n}\n\nfunction verification(json) {\n  // Execução manual pelo gatilho \"Show verify token for Meta\": mostra o valor para o painel da Meta.\n  if (json.query === undefined) {\n    return { fromMeta: false, verifyToken: json.expectedToken };\n  }\n  const query = json.query ?? {};\n  const challenge = query['hub.challenge'];\n  const accepted =\n    query['hub.mode'] === 'subscribe' &&\n    typeof challenge === 'string' &&\n    CHALLENGE_PATTERN.test(challenge) &&\n    sameText(query['hub.verify_token'], json.expectedToken);\n  if (!accepted) {\n    console.log(JSON.stringify({ event: 'whatsapp_verification_rejected' }));\n    return { fromMeta: true, status: 403, body: '' };\n  }\n  return { fromMeta: true, status: 200, body: challenge };\n}\n\nreturn $input.all().map((item) => ({ json: verification(item.json) }));"
+      },
+      "id": "e3b0c442-0004-4f19-9a19-000000000004",
+      "name": "Check verification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -325]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3b0c442-2001-4f19-9a19-000000002001",
+              "leftValue": "={{ $json.fromMeta }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0005-4f19-9a19-000000000005",
+      "name": "Is Meta request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, -325]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.status }}"
+        }
+      },
+      "id": "e3b0c442-0006-4f19-9a19-000000000006",
+      "name": "Respond to Meta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [880, -400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "e3b0c442-0007-4f19-9a19-000000000007",
+      "name": "WhatsApp events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 100],
+      "webhookId": "8a1d4e6b-2c93-4f19-b7d5-3e6f0a9c2b10"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "type": "SHA256",
+        "dataPropertyName": "computedSignature",
+        "encoding": "hex"
+      },
+      "id": "e3b0c442-0008-4f19-9a19-000000000008",
+      "name": "Compute signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [220, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const BSUID = /^[A-Z]{2}\\.[A-Za-z0-9.]{1,150}$/;\nconst DIGITS = /^[0-9]{1,30}$/;\nconst MAX_ID_LENGTH = 200;\nconst MAX_TEXT_LENGTH = 4096;\nconst MAX_NAME_LENGTH = 100;\nconst IGNORED_TYPES = ['reaction', 'system', 'request_welcome'];\n\nfunction log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction signatureMatches(json) {\n  const header = json.headers?.['x-hub-signature-256'];\n  const computed = json.computedSignature;\n  if (typeof header !== 'string' || typeof computed !== 'string' || computed.length === 0) {\n    return false;\n  }\n  const expected = `sha256=${computed}`;\n  if (header.length !== expected.length) return false;\n  let difference = 0;\n  for (let index = 0; index < expected.length; index++) {\n    difference |= header.charCodeAt(index) ^ expected.charCodeAt(index);\n  }\n  return difference === 0;\n}\n\nfunction text(value, maxLength) {\n  return typeof value === 'string' && value.trim().length > 0 ? value.slice(0, maxLength) : null;\n}\n\nfunction matching(value, pattern) {\n  return typeof value === 'string' && pattern.test(value) ? value : null;\n}\n\nfunction errorCodes(errors) {\n  return (Array.isArray(errors) ? errors : []).map((error) => error?.code).filter(Number.isInteger);\n}\n\nfunction content(message) {\n  if (message.type === 'text') {\n    const body = text(message.text?.body, MAX_TEXT_LENGTH);\n    if (body !== null) return { type: 'text', text: body, replyId: null };\n  }\n  if (message.type === 'interactive') {\n    const reply = message.interactive?.button_reply ?? message.interactive?.list_reply;\n    const replyId = text(reply?.id, MAX_ID_LENGTH);\n    if (replyId !== null) return { type: 'reply', text: text(reply.title, MAX_TEXT_LENGTH), replyId };\n  }\n  return { type: 'unsupported', text: null, replyId: null };\n}\n\nfunction parseMessage(message, contacts, phoneNumberId) {\n  if (IGNORED_TYPES.includes(message.type)) return null;\n  const contact =\n    contacts.find((candidate) => typeof message.from_user_id === 'string' && candidate?.user_id === message.from_user_id) ??\n    (contacts.length === 1 ? contacts[0] : undefined);\n  const messageId = text(message.id, MAX_ID_LENGTH);\n  const leadId = matching(message.from_user_id ?? contact?.user_id, BSUID);\n  if (messageId === null || leadId === null) {\n    log('whatsapp_invalid_message', { phoneNumberId });\n    return null;\n  }\n  const seconds = Number(message.timestamp);\n  return {\n    phoneNumberId,\n    messageId,\n    leadId,\n    phone: matching(message.from ?? contact?.wa_id, DIGITS),\n    name: text(contact?.profile?.name, MAX_NAME_LENGTH),\n    ...content(message),\n    receivedAt: new Date(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()).toISOString(),\n  };\n}\n\nfunction parseChange(change) {\n  // smb_message_echoes fica para a T020; history, smb_app_state_sync e account_update são descartados (D013).\n  if (change?.field !== 'messages' || typeof change.value !== 'object' || change.value === null) return [];\n  const value = change.value;\n  const phoneNumberId = matching(value.metadata?.phone_number_id, DIGITS);\n  if (phoneNumberId === null) {\n    log('whatsapp_invalid_payload');\n    return [];\n  }\n  for (const status of Array.isArray(value.statuses) ? value.statuses : []) {\n    if (status?.status === 'failed') {\n      log('whatsapp_failed_status', { phoneNumberId, errorCodes: errorCodes(status.errors) });\n    }\n  }\n  if (Array.isArray(value.errors) && value.errors.length > 0) {\n    log('whatsapp_webhook_error', { phoneNumberId, errorCodes: errorCodes(value.errors) });\n  }\n  const contacts = Array.isArray(value.contacts) ? value.contacts : [];\n  return (Array.isArray(value.messages) ? value.messages : [])\n    .filter((message) => typeof message === 'object' && message !== null)\n    .map((message) => parseMessage(message, contacts, phoneNumberId))\n    .filter((message) => message !== null);\n}\n\nfunction parseEvents(json) {\n  if (!signatureMatches(json)) {\n    log('whatsapp_invalid_signature');\n    return [];\n  }\n  const body = json.body;\n  if (body?.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) {\n    log('whatsapp_unexpected_payload');\n    return [];\n  }\n  return body.entry\n    .flatMap((entry) => (Array.isArray(entry?.changes) ? entry.changes : []))\n    .flatMap(parseChange);\n}\n\nreturn $input.all().flatMap((item) => parseEvents(item.json).map((json) => ({ json })));"
+      },
+      "id": "e3b0c442-0009-4f19-9a19-000000000009",
+      "name": "Parse events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_processed_messages",
+        "columns": {
+          "column": [
+            {
+              "name": "messageId",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0010-4f19-9a19-000000000010",
+      "name": "Ensure message table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [660, 0],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_processed_messages",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "messageId",
+              "keyValue": "={{ $json.messageId }}"
+            }
+          ]
+        }
+      },
+      "id": "e3b0c442-0011-4f19-9a19-000000000011",
+      "name": "Is new message",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_processed_messages",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "messageId": "={{ $json.messageId }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "messageId",
+              "displayName": "messageId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0012-4f19-9a19-000000000012",
+      "name": "Record message",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [880, 100]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "loadClientConfig",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "e3b0c442-0013-4f19-9a19-000000000013",
+      "name": "Load client config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "function log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction buildEvent(result, message) {\n  if (Array.isArray(result.invalidConfigs) && result.invalidConfigs.length > 0) {\n    log('client_configs_invalid', { folders: result.invalidConfigs });\n  }\n  if (result.found !== true) {\n    log('whatsapp_unknown_client', { phoneNumberId: message.phoneNumberId, reason: result.reason ?? 'unknown' });\n    return [];\n  }\n  return [\n    {\n      event: {\n        clientId: result.config.id,\n        channel: 'whatsapp',\n        leadId: message.leadId,\n        phone: message.phone,\n        name: message.name,\n        messageIds: [message.messageId],\n        type: message.type,\n        text: message.text,\n        replyId: message.replyId,\n        receivedAt: message.receivedAt,\n      },\n      config: result.config,\n    },\n  ];\n}\n\nreturn $input.all().flatMap((item, index) =>\n  buildEvent(item.json, $('Is new message').itemMatching(index).json).map((json) => ({ json })),\n);"
+      },
+      "id": "e3b0c442-0014-4f19-9a19-000000000014",
+      "name": "Build event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "id": "e3b0c442-0015-4f19-9a19-000000000015",
+      "name": "Every day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_processed_messages",
+        "columns": {
+          "column": [
+            {
+              "name": "messageId",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0016-4f19-9a19-000000000016",
+      "name": "Ensure message table (daily)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 500]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_processed_messages",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "createdAt",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus({ days: 7 }).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0017-4f19-9a19-000000000017",
+      "name": "Delete old message IDs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 700]
+    }
+  ],
+  "connections": {
+    "Meta verification request": {
+      "main": [
+        [
+          {
+            "node": "Derive verify token (HMAC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show verify token for Meta": {
+      "main": [
+        [
+          {
+            "node": "Derive verify token (HMAC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Derive verify token (HMAC)": {
+      "main": [
+        [
+          {
+            "node": "Check verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check verification": {
+      "main": [
+        [
+          {
+            "node": "Is Meta request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Meta request": {
+      "main": [
+        [
+          {
+            "node": "Respond to Meta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "WhatsApp events": {
+      "main": [
+        [
+          {
+            "node": "Compute signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute signature": {
+      "main": [
+        [
+          {
+            "node": "Parse events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse events": {
+      "main": [
+        [
+          {
+            "node": "Ensure message table",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is new message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is new message": {
+      "main": [
+        [
+          {
+            "node": "Record message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Load client config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load client config": {
+      "main": [
+        [
+          {
+            "node": "Build event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every day": {
+      "main": [
+        [
+          {
+            "node": "Ensure message table (daily)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete old message IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

@@ -99,7 +99,7 @@ docker compose --env-file .env -f infra/n8n/compose.yaml up -d --no-deps --force
 
 Conferir a URL mostrada pelo nó Webhook no editor. Usar `/webhook-test/` apenas
 enquanto o nó estiver escutando um teste e `/webhook/` com o workflow publicado.
-A ligação do app da Meta e a validação de assinatura serão feitas na T019.
+Para ligar o app da Meta, seguir o [README da entrada do WhatsApp](../../automations/whatsapp-inbound/README.md#ligar-o-app-de-teste-da-meta) (T019).
 
 Recriar o túnel pode mudar sua URL: atualizar `.env`, recriar o n8n e atualizar o
 callback no fornecedor a cada mudança. Para fechar o acesso externo:
@@ -127,6 +127,13 @@ acima. O túnel não inicia junto do Docker; o perfil é opcional e não tem rei
 
 Usar somente dados fictícios nos testes e não registrar payloads pessoais em logs.
 Logs dos containers têm rotação de 10 MB por arquivo, com até três arquivos.
+`CODE_ENABLE_STDOUT` manda o `console.log` dos nós Code para o log do n8n, onde os fluxos
+registram só eventos sem dados pessoais (ex.: [entrada do WhatsApp](../../automations/whatsapp-inbound/README.md#logs)).
+Para ver as últimas linhas:
+
+```powershell
+docker compose --env-file .env -f infra/n8n/compose.yaml logs --tail 50 n8n
+```
 
 ## 6. Verificar o ambiente e parar
 

@@ -23,22 +23,25 @@ Regras da Meta conferidas em 2026-09 na documentação oficial (links no fim).
 ## Entrada (D016)
 
 - Um único webhook no n8n recebe os eventos de todos os clientes do app.
-- GET: responde ao desafio de verificação da Meta (`hub.verify_token`).
+- GET: responde ao desafio de verificação da Meta (`hub.verify_token`); o verify token é derivado
+  do App Secret (D027).
 - POST: responde 200 na hora e depois confere a assinatura `X-Hub-Signature-256` (HMAC SHA-256 do
-  corpo com o App Secret). Assinatura inválida: descarta e alerta.
+  corpo com o App Secret). Assinatura inválida: descarta e registra no log (aviso na T027).
 - Campos assinados no app: `messages` e, para clientes em coexistência, `smb_message_echoes`
   (mensagens que a equipe envia pelo app). `history`, `smb_app_state_sync` e `account_update`
   também chegam, por causa do cadastro ([whatsapp-cadastro.md](whatsapp-cadastro.md)): a entrada
   confirma e descarta. O histórico sincronizado no cadastro não é guardado (D013).
-- Descarta eventos repetidos pelo ID da mensagem (`wamid`); a Meta reenvia o que não confirmou.
+- Descarta eventos repetidos pelo ID da mensagem (`wamid`), guardado por 7 dias: a Meta reenvia o
+  que não confirmou por até 7 dias.
 - Identifica o cliente pelo `metadata.phone_number_id` (D014) e o lead pelo BSUID
   (`from_user_id` / `user_id`). O telefone (`from` / `wa_id`) pode não vir, porque o usuário pode
   usar nome de usuário. Telefone e nome do perfil, quando vêm, seguem só para o CRM (D017). Se o
   lead trocar de número, o BSUID muda e a conversa recomeça.
-- Status: `failed` gera alerta sem dados pessoais; os demais são ignorados.
+- Status: `failed` vai para o log sem dados pessoais (aviso na T027); os demais são ignorados.
 - Texto e respostas de botão ou lista seguem para a conversa. Outros tipos (áudio, imagem,
   localização) recebem a mensagem `handoff` e vão para a equipe, até existir transcrição de áudio
-  (T026).
+  (T026). Reações e mensagens de sistema são ignoradas.
+- Implementação: [automations/whatsapp-inbound](../../automations/whatsapp-inbound/README.md) (T019).
 
 A entrada entrega à conversa um evento por lead e por rajada. Outras fontes de lead geram o mesmo
 formato, com o próprio `channel` (valores fictícios):
