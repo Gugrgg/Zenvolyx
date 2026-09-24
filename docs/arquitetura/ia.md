@@ -1,25 +1,76 @@
 # IA na conversa
 
-Como a Zenvolyx usa IA nas conversas com leads (D019). Contrato do conector:
+Como a Zenvolyx usa IA nas conversas com leads (D019, D026). Contrato do conector:
 [integrations/ai](../../integrations/ai/README.md). Preços e regras da Anthropic conferidos na
 documentação oficial em 2026-09 (links no fim).
 
 ## O que a IA faz
 
 - Entende o que o lead escreveu diante da pergunta atual da config: acha a opção certa em texto
-  livre ("quero fazer uma limpeza" vira `cleaning`) e reconhece dúvida, pedido de atendente e
-  pedido para parar.
+  livre ("quero fazer uma limpeza" vira `cleaning`) e reconhece dúvida, pedido de atendente,
+  relato de urgência e pedido para parar.
 - Responde dúvidas com a base de conhecimento do cliente (`ai.knowledge`): endereço, formas de
-  pagamento, serviços e o que mais o cliente aprovar. Se a resposta não está na base, chama a equipe.
+  pagamento, serviços e o que mais o cliente aprovar. Se a resposta não está na base, diz que não
+  tem a informação, sem inventar, e chama a equipe.
 
 ## O que a IA não faz
 
 - Não decide se o lead está qualificado: quem decide são as regras da config.
 - Não oferece horário: só os que vieram de `listSlots` (D018).
 - Não inventa preço, disponibilidade nem promessa fora da base.
-- Não pede nem repete dados de saúde. Se perceber urgência de saúde, orienta procurar o serviço de
-  emergência (192) e chama a equipe.
+- Não pede nem repete dados de saúde e nunca faz o papel do profissional: diagnóstico,
+  tratamento, remédio e urgência seguem as regras de saúde, abaixo.
 - Não grava nada: o fluxo decide o que vai para o estado e para o CRM.
+
+## Regras de saúde (D026)
+
+A IA é um atendente administrativo e nunca faz o papel do profissional. As regras valem para todo
+cliente e pesam mais nos de saúde, como clínicas odontológicas. Casos da demo:
+[demo-cenarios.md](demo-cenarios.md).
+
+A IA pode:
+
+- informar horário de funcionamento, endereço e tratamentos oferecidos, conforme a base;
+- informar as formas de pagamento que estejam na base, quando o paciente perguntar;
+- explicar como funciona a avaliação, do ponto de vista administrativo (duração, o que levar,
+  quem atende);
+- marcar a avaliação nos horários da agenda; remarcar e cancelar, por enquanto, vão para a equipe
+  (T043);
+- chamar a equipe.
+
+A IA não pode:
+
+- diagnosticar, nem interpretar sintomas como diagnóstico ("pode ser canal");
+- recomendar tratamento ou procedimento para o caso da pessoa;
+- recomendar ou prescrever remédio, nem orientar cuidados em casa;
+- dar orientação odontológica individual ou substituir a avaliação do profissional;
+- dizer preço, prazo ou resultado que não esteja na base, nem fazer propaganda (desconto, promoção,
+  gratuidade ou condição especial). O Código de Ética Odontológica proíbe publicidade com preço,
+  serviço gratuito e modalidade de pagamento (art. 44, I).
+
+Pergunta clínica sem urgência ("é cárie?", "posso tomar algum remédio?"): a IA diz que só o
+dentista avalia isso, na consulta, e convida para a avaliação; a conversa segue.
+
+### Urgência
+
+A IA devolve `urgent` quando o paciente relata, por exemplo:
+
+- dor intensa;
+- inchaço importante no rosto, na boca ou no pescoço;
+- sangramento significativo ou que não para;
+- trauma: pancada, queda, dente quebrado ou que saiu do lugar;
+- dificuldade para respirar ou engolir;
+- outra suspeita de emergência, como febre com inchaço.
+
+Na dúvida entre urgência e dúvida comum, vale `urgent`. O fluxo então interrompe a conversa
+comercial (nada de pergunta pendente nem lista de horários), envia `messages.urgent`, grava o lead
+como `urgent` no CRM, pausa a automação por 24 h e chama a equipe. A IA não escreve essa resposta:
+o texto é fixo na config, revisado pela clínica, e orienta procurar um pronto-socorro ou o 192 nos
+casos graves. Exemplo:
+
+> Sinto muito que você esteja passando por isso. Vou chamar agora a nossa equipe para te atender
+> com prioridade. Se tiver dificuldade para respirar ou engolir, sangramento que não para ou
+> inchaço que aumenta rápido, procure agora um pronto-socorro ou ligue 192.
 
 ## Como entra na conversa
 
@@ -28,7 +79,8 @@ documentação oficial em 2026-09 (links no fim).
 3. Com `answer` preenchido, o fluxo registra a resposta e segue para a próxima pergunta (com
    botões) ou para as regras de qualificação.
 4. `reply` preenchido vai para o lead antes da próxima pergunta.
-5. `human` chama a equipe; `stop` registra o pedido para parar (D016).
+5. `urgent` interrompe a conversa e segue as regras de urgência (D026); `human` chama a equipe;
+   `stop` registra o pedido para parar (D016).
 6. Falha, recusa da IA ou saída inválida: o fluxo repete a pergunta com botões; na segunda falha
    seguida, chama a equipe.
 
@@ -88,6 +140,10 @@ Casos fictícios (mensagem, pergunta atual e base, com a intenção e a resposta
 contra a IA de verdade (T025), fora do `npm test`, porque cada rodada custa dinheiro. Toda troca de
 modelo, esforço ou instruções passa por ela.
 
+Até a demo, a conferência é manual (D025): os casos de saúde na T024 e todos os cenários da demo na
+T030 ([demo-cenarios.md](demo-cenarios.md)). A T025 vem depois da demo, reaproveita esses cenários
+e é exigida antes do primeiro cliente real.
+
 ## O que o dono precisa fazer
 
 - Criar a conta no Console da Anthropic, gerar a chave da API e cadastrá-la como credencial no
@@ -104,3 +160,4 @@ modelo, esforço ou instruções passa por ela.
 - [Cache de prompt](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 - [Retenção de dados da API](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data)
 - [Meta Business Agent: preços](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages)
+- [Publicidade na odontologia: perguntas frequentes do CRO-SC](https://crosc.org.br/perguntas-frequentes-fiscalizacao/)

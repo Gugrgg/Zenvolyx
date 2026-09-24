@@ -97,7 +97,7 @@ precisar, informando ocupação e criando eventos do mesmo jeito.
 ## Depois da demo
 
 - Lembrete antes do horário, por template de utilidade enviado ao BSUID guardado no evento (T023).
-- Remarcar e cancelar pelo WhatsApp.
+- Remarcar e cancelar pelo WhatsApp (T043). Até lá, o pedido vai para a equipe.
 
 Como testar: fixtures fictícias em `tests/fixtures/calendar/` e roteiro de verificação no README de
 cada fornecedor (T022).

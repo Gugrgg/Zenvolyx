@@ -39,7 +39,7 @@ Um item JSON por chamada ao roteador (valores fictícios):
 | `crm` | Seção `crm` da config do cliente, sem mudanças. |
 | `lead.id` | BSUID do lead (D016). |
 | `lead.phone`, `lead.name` | Telefone e nome do perfil do WhatsApp, quando vierem; senão `null`. |
-| `lead.stage` | `talking` (em conversa), `qualified`, `not_qualified`, `scheduled` ou `with_team`. |
+| `lead.stage` | `talking` (em conversa), `qualified`, `not_qualified`, `scheduled`, `with_team`, `urgent` (relatou urgência de saúde e foi para a equipe, D026) ou `stopped` (pediu para parar). |
 | `lead.answers` | Perguntas feitas e respostas dadas, com os textos da config. |
 | `lead.appointment` | Horário marcado, quando houver: `{ "start", "end", "service" }`, com datas em ISO 8601 (UTC) e `service` podendo ser `null` (D018). |
 | `lead.firstContactAt`, `lead.lastContactAt` | Datas em ISO 8601, em UTC. |
@@ -60,6 +60,8 @@ Um item JSON por chamada ao roteador (valores fictícios):
   dados pessoais e segue a conversa, e a próxima gravação leva o estado completo.
 - Grava só os campos acima, nunca o texto da conversa. Os dados no CRM são do cliente, que é o
   controlador na LGPD; a Zenvolyx apenas opera.
+- `stopped` fica no CRM para a equipe também não procurar o lead: o estado da conversa, onde o
+  pedido é guardado, é apagado depois de 30 dias sem interação (D020).
 - Logs e alertas não levam telefone, nome nem respostas.
 
 ## Fornecedores
@@ -74,7 +76,8 @@ Um item JSON por chamada ao roteador (valores fictícios):
   `spreadsheetId` é o trecho da URL da planilha entre `/d/` e `/edit`.
 - Colunas da aba `Leads`, nesta ordem: Nome, Telefone, Etapa, Respostas, Agendamento, Canal,
   Primeiro contato, Último contato, ID do lead.
-- Etapa em português: Em conversa, Qualificado, Não qualificado, Agendado, Com a equipe. Respostas:
+- Etapa em português: Em conversa, Qualificado, Não qualificado, Agendado, Com a equipe, Urgência,
+  Pediu para parar. Respostas:
   uma linha por pergunta, no formato "pergunta: resposta". Agendamento como "dd/mm/aaaa hh:mm
   (serviço)". Datas no fuso do cliente (`timezone`).
 

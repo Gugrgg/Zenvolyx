@@ -3,6 +3,18 @@
 Fila central de trabalho. Regras: `AGENTS.md`, seções 6 e 7.
 Tarefas curtas. Detalhes ficam na documentação da área (linha `Ref:`).
 
+## Objetivo atual
+
+**Conseguir o primeiro cliente odontológico pagando pela Zenvolyx** (D025).
+
+- Oferta: Sistema de Atendimento, Qualificação e Agendamento com IA para Clínicas Odontológicas.
+  Promessa: "Transformamos mensagens de interessados no WhatsApp em avaliações odontológicas
+  agendadas automaticamente." Foco em novos pacientes.
+- Demo funcional primeiro, produção robusta depois. Até a demo ficar pronta (T030 e T042), só
+  entra o que ela exige: "Backlog: caminho da demo", na ordem.
+- Com a demo pronta, o desenvolvimento para e segue a "Fase comercial". O "Backlog: depois da
+  demo" espera o primeiro cliente fechado (B011); a implantação dele (B012) puxa só o necessário.
+
 Formato (linhas de baixo são opcionais):
 
 ```
@@ -10,40 +22,102 @@ Formato (linhas de baixo são opcionais):
   Depende: T000 | Sugerido: CLAUDE ou CODEX | Ref: caminho/do/doc.md
 ```
 
-## Backlog
+Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um agente pode ajudar.
+
+## Backlog: caminho da demo
+
+Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
+([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
 - [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
   Depende: T007, T012, T016 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
-- [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
-  Depende: T019 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
-- [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone), com planilha modelo e passo a passo da conta de serviço do Google
+- [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone e as etapas `urgent` e `stopped`), com planilha modelo e passo a passo da conta de serviço do Google
   Depende: T008, T012 | Sugerido: CLAUDE | Ref: integrations/crm/README.md, DECISIONS.md (D017)
 - [ ] T022 Criar o roteador `integrations/calendar/router/` (listSlots e book, com o cálculo de horários numa função testada) e o conector `integrations/calendar/google-calendar/` (ocupação e criação de evento pela conta de serviço)
   Depende: T010, T012 | Sugerido: CODEX | Ref: integrations/calendar/README.md, DECISIONS.md (D018)
-- [ ] T023 Especificar o lembrete antes do horário marcado (template de utilidade, antecedência e config), para depois da demo
-  Depende: T010 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
-- [ ] T024 Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache e validação da resposta)
-  Depende: T011, T012 | Sugerido: CODEX | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019)
-- [ ] T025 Criar a avaliação da IA (casos fictícios e `npm run eval:ai`, fora do `npm test`, com o custo de cada rodada)
-  Depende: T024 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Avaliação)
-- [ ] T026 Escolher o serviço de transcrição de áudio (custo, LGPD e integração), para depois da demo
-  Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
-- [ ] T027 Criar o fluxo de erro global e o sub-workflow `automations/alert/` (aviso por e-mail à agência, sem dados pessoais)
-  Depende: T012 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (Erros), docs/arquitetura/demo.md
-- [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe e pedido para parar, com o estado em tabela (D020)
-  Depende: T016, T018, T019, T021, T024, T027 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), DECISIONS.md (D020)
-- [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado, confirmação e CRM `scheduled`
+- [ ] T039 Guardrails odontológicos na config: mensagem fixa de urgência `messages.urgent` (D026) e `messages.slotTaken` (horário ocupado), com validador, testes, README e todas as configs
+  Depende: T037 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Regras de saúde), clients/README.md
+- [ ] T024 Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
+  Depende: T011, T012 | Sugerido: CODEX | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
+- [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, urgência e pedido para parar)
+  Depende: T019 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
+- [ ] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
+  Depende: T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
+- [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
+  Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
+- [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe, urgência e pedido para parar, com o estado em tabela (D020); erros e chamadas da equipe em log sem dados pessoais até a T027
+  Depende: T016, T018, T019, T021, T024, T039 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), DECISIONS.md (D020, D026)
+- [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
   Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
-- [ ] T030 Testar a demo de ponta a ponta com o dono e escrever o roteiro de apresentação
-  Depende: T020, T025, T029 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md
-- [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas)
-  Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
+- [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
+  Depende: T029 | Sugerido: CODEX | Ref: docs/arquitetura/demo-cenarios.md
+- [ ] T030 Testar a demo odontológica de ponta a ponta com o dono: todos os cenários no celular dele, com a IA de verdade, e o resultado na validação desta tarefa
+  Depende: T020, T029, T038, T040, T041 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md, docs/arquitetura/demo-cenarios.md
+- [ ] T042 Escrever o roteiro de apresentação da demo para donos de clínica (cerca de 5 minutos): ordem dos cenários, o que mostrar no WhatsApp, na planilha e na agenda, e respostas para dúvidas comuns
+  Depende: T030 | Sugerido: CLAUDE | Ref: docs/comercial/, docs/arquitetura/demo-cenarios.md
+
+## Backlog: depois da demo
+
+Só com pedido do dono (D025): espera o primeiro cliente fechado (B011). Antes de ativar o primeiro
+cliente real (B012), são exigidas T025, T027 e T032, mais o cadastro do número dele (T034 e T035,
+ou o mínimo que a B012 definir).
+
+- [ ] T025 Criar a avaliação da IA (casos fictícios e `npm run eval:ai`, fora do `npm test`, com o custo de cada rodada), reaproveitando os cenários da demo
+  Depende: T024 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Avaliação)
+- [ ] T027 Criar o fluxo de erro global e o sub-workflow `automations/alert/` (aviso por e-mail à agência, sem dados pessoais), ligado aos pontos que a conversa deixou em log
+  Depende: T012, T029 | Sugerido: CLAUDE | Ref: docs/arquitetura/visao-geral.md (Erros), docs/arquitetura/demo.md
 - [ ] T032 Especificar a produção antes do primeiro cliente real: servidor, domínio com HTTPS, backup e atualização de `clients/` e dos workflows
   Depende: T012 | Sugerido: CLAUDE | Ref: DECISIONS.md (D006, D021), docs/arquitetura/whatsapp-cadastro.md
-- [ ] T034 Criar o fluxo de cadastro `automations/whatsapp-onboarding/`: convite, página do cadastro incorporado v4 com coexistência, troca do código em até 30 s, porta do cliente, webhooks da conta, sincronização e aviso
-  Depende: T027, T032, T035 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
 - [ ] T035 Criar a porta do cliente automaticamente pela API do n8n (credencial, workflow a partir do modelo e publicação), para o fluxo de cadastro
   Depende: T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
+- [ ] T034 Criar o fluxo de cadastro `automations/whatsapp-onboarding/`: convite, página do cadastro incorporado v4 com coexistência, troca do código em até 30 s, porta do cliente, webhooks da conta, sincronização e aviso
+  Depende: T027, T032, T035 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
+- [ ] T023 Especificar o lembrete antes do horário marcado (template de utilidade, antecedência e config)
+  Depende: T010 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
+- [ ] T043 Remarcar e cancelar a avaliação pelo WhatsApp (hoje o pedido vai para a equipe)
+  Depende: T029 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
+- [ ] T026 Escolher o serviço de transcrição de áudio (custo, LGPD e integração)
+  Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
+- [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas); até lá, limpar o export à mão
+  Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
+
+## Fase comercial: primeiro cliente
+
+Do dono; marcar `[x]` aqui mesmo. Agentes só ajudam quando o dono pede, e nada aqui usa
+automação: nada de raspagem de dados, disparo em massa ou contas criadas por agentes. Listas e
+contatos de clínicas ficam fora do repositório (dados pessoais). B001, B002, B004 a B006 e B015
+podem começar antes de a demo ficar pronta.
+
+- [ ] B001 Definir a oferta odontológica: perfil de clínica, o que entra e o que não entra, preço de implantação e mensalidade, e condição do piloto
+  Apoio: CLAUDE | Ref: docs/comercial/
+- [ ] B002 Criar a apresentação curta da solução: problema, resultado, como funciona, segurança da IA e preço
+  Depende: B001 | Apoio: CLAUDE
+- [ ] B003 Gravar o vídeo da demo (2 a 3 minutos), seguindo o roteiro
+  Depende: T042
+- [ ] B004 Montar a lista inicial de 50 clínicas odontológicas, por pesquisa manual
+  Depende: B001
+- [ ] B005 Identificar o decisor ou gestor de cada clínica da lista
+  Depende: B004
+- [ ] B006 Criar a mensagem de prospecção (primeiro contato e retorno), sem prometer o que a demo não faz
+  Depende: B001 | Apoio: CLAUDE
+- [ ] B007 Contatar as primeiras 20 clínicas, uma a uma
+  Depende: B003, B005, B006
+- [ ] B008 Conseguir a primeira reunião
+  Depende: B007
+- [ ] B009 Fazer a discovery call: volume de contatos, como agendam hoje, agenda e CRM usados, quem responde o WhatsApp e principais dores
+  Depende: B008 | Apoio: CLAUDE (roteiro de perguntas)
+- [ ] B010 Enviar a primeira proposta
+  Depende: B009 | Apoio: CLAUDE
+- [ ] B011 Fechar o primeiro cliente: contrato assinado e primeiro pagamento
+  Depende: B010
+- [ ] B012 Implantar o primeiro cliente real: config, número, produção e o que mais o "Backlog: depois da demo" exigir
+  Depende: B011, B015 | Apoio: CLAUDE e CODEX
+- [ ] B013 Medir os resultados do primeiro mês: contatos, avaliações agendadas, tempo de resposta e comparecimento
+  Depende: B012
+- [ ] B014 Criar o primeiro case, com autorização da clínica
+  Depende: B013
+- [ ] B015 Preparar a Zenvolyx na Meta para clientes reais: verificação da empresa e site com política de privacidade já; revisão do app com vídeos da demo depois da T030
+  Depende: B001 | Apoio: CLAUDE | Ref: docs/arquitetura/whatsapp-cadastro.md (Pré-requisitos)
 
 ## Em andamento
 
@@ -52,6 +126,14 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T036 Repriorizar o projeto para a demo odontológica e o primeiro cliente pagante: objetivo, caminho da demo, fase comercial, dependências, regras de saúde e cenários
+  Ref: TASKS.md (Objetivo atual), DECISIONS.md (D025, D026), docs/arquitetura/demo.md, docs/arquitetura/demo-cenarios.md, docs/arquitetura/ia.md (Regras de saúde)
+  Validação: dependências conferidas por script temporário: nenhuma tarefa do caminho da demo depende de "depois da demo" ou da fase comercial, e não há ciclo, ID repetido nem tarefa antes da própria dependência. Regra de publicidade odontológica (art. 44, I) conferida no site do CRO-SC em 2026-09. `npm test` (178 testes), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram; 42 links locais válidos.
+
+- [x] T037 Criar o cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo): tratamentos, pergunta de primeira consulta, regra de novos pacientes e mensagens, com config inativa e README
+  Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo.md
+  Validação: `npm run check:clients` (3 configs) e `npm test` passaram. A config fica inativa, com `PREENCHER` nos IDs, até a T030; base da IA, mensagens novas e agenda entram nas T038, T039 e T040.
 
 - [x] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID), chamando a Graph API pela porta do cliente
   Ref: integrations/whatsapp/cloud-api/README.md, integrations/whatsapp/README.md
@@ -156,11 +238,14 @@ Arquivos principais:
 - automations/load-client-config/README.md
 Próxima tarefa: T019
 Observações:
-- T019: chamar pelo nó Execute Workflow (fonte "Database", ID `loadClientConfig`, "Run once for each item") com `{ "phoneNumberId": <metadata.phone_number_id> }`. Com `found: false`, parar o fluxo; `found: false` ou `invalidConfigs` com itens geram aviso sem dados pessoais (T027; até lá, só log sem dados pessoais).
+- T019: chamar pelo nó Execute Workflow (fonte "Database", ID `loadClientConfig`, "Run once for each item") com `{ "phoneNumberId": <metadata.phone_number_id> }`. Com `found: false`, parar o fluxo; `found: false` ou `invalidConfigs` com itens geram aviso sem dados pessoais (T027, depois da demo; até lá, só log sem dados pessoais).
+- T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição. O lead é identificado pelo BSUID (`from_user_id` / `user_id`); o telefone pode não vir.
+- T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013). O número de teste da Meta não usa o app, então não gera `smb_message_echoes`: a pausa por eco da equipe só é testada com fixture.
+- Até a T031 (depois da demo), limpar cada export à mão (D022): o JSON fica só com `id`, `name`, `nodes`, `connections`, `settings` e `active`. Conferir que `shared` (dono e projeto do n8n) não entrou.
 - CLI do n8n dentro do container sempre com `-e N8N_RUNNERS_BROKER_PORT=5690`; importar despublica, então publicar e reiniciar o n8n depois (infra/n8n/README.md, seção 7). `n8n execute` não inicializa Data tables: testar fluxos com tabela pelo webhook.
 - Docker Desktop fica em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer, usar `resources/bin/docker.exe` dessa pasta.
 - O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
-- Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a Zenvolyx; `npm run check:clients` valida antes de publicar.
+- Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a clínica da demo (`clients/odontologia-demo/`, T030); `npm run check:clients` valida antes de publicar.
 
 ### Handoff T018
 Concluído:
@@ -171,26 +256,11 @@ Arquivos principais:
 - integrations/whatsapp/README.md
 Próxima tarefa: T028
 Observações:
-- T028 e T029: chamar pelo nó Execute Workflow (ID `whatsappCloudApi`, "Run once for each item"), com `clientId`, `gatewayWorkflowId` e `phoneNumberId` da config, mais os campos da ação. `auth` e `no_gateway` geram aviso à agência (T027); `outside_window` exige template.
-- Envio de verdade ainda não foi testado: falta token válido e número de teste da Meta (T030). A porta da Zenvolyx é criada à mão (integrations/whatsapp/client-gateway/README.md).
+- T028 e T029: chamar pelo nó Execute Workflow (ID `whatsappCloudApi`, "Run once for each item"), com `clientId`, `gatewayWorkflowId` e `phoneNumberId` da config, mais os campos da ação. `auth` e `no_gateway` geram aviso à agência (T027, depois da demo; até lá, log sem dados pessoais); `outside_window` exige template.
+- Envio de verdade ainda não foi testado: falta token válido e número de teste da Meta (T030). A porta da clínica da demo é criada à mão, com o token da Zenvolyx (integrations/whatsapp/client-gateway/README.md).
 - T019: `history`, `smb_app_state_sync` e `account_update` chegam no mesmo webhook; confirmar e descartar (D013).
 - T035 e T034: workflows que manipulam token não salvam dados de execução, nem em erro. A T034 depende da produção (T032) e das aprovações da Meta (docs/arquitetura/whatsapp-cadastro.md, Pré-requisitos).
 - No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além da credencial fictícia "T033 teste (pode apagar)"; podem ser apagados pelo editor.
-
-### Handoff T007
-Concluído:
-- abordagem do WhatsApp em docs/arquitetura/whatsapp.md; contrato do conector em integrations/whatsapp/README.md
-- D015 (número do cliente, agência como Tech Provider, coexistência) e D016 (webhook único, BSUID, rajadas, pausa humana)
-Arquivos principais:
-- docs/arquitetura/whatsapp.md
-- integrations/whatsapp/README.md
-Próxima tarefa: T018
-Observações:
-- A D015 foi substituída pela D023 (T017): não há credencial única; o conector chama a Graph API pela porta do cliente (ver Handoff T017).
-- O lead é identificado pelo BSUID (`from_user_id` / `user_id`); o telefone pode não vir. Envio pelo campo `recipient`.
-- T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição.
-- T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013).
-- O número de teste da Meta não usa o app, então não gera `smb_message_echoes`: a pausa por eco da equipe só é testada com fixture até existir cliente em coexistência (T017).
 
 ### Handoff T008
 Concluído:
@@ -204,6 +274,7 @@ Observações:
 - T021: README com passo a passo simples para o dono criar a conta de serviço no Google Cloud (com a Sheets API ativada) e cadastrar a credencial no n8n; a chave JSON fica só no n8n. Cabeçalho da aba `Leads` num CSV modelo em `integrations/crm/google-sheets/`, para importar numa planilha nova.
 - T021: fixtures fictícias em `tests/fixtures/crm/`: lead novo, atualização pelo BSUID, BSUID novo com o mesmo telefone e fornecedor desconhecido.
 - T019: o evento da entrada ganhou `name` (nome do perfil do WhatsApp, opcional), que vai para o CRM (docs/arquitetura/whatsapp.md).
+- T021: etapas novas `urgent` (Urgência) e `stopped` (Pediu para parar) no contrato (T036, D026).
 
 ### Handoff T010
 Concluído:
@@ -231,7 +302,8 @@ Observações:
 - T024: `POST https://api.anthropic.com/v1/messages` pelo nó HTTP Request, com a credencial da Anthropic no n8n; `model` `claude-opus-5-5`; `output_config` com `effort: "low"` e `format: { "type": "json_schema", "schema": ... }` (esquema fixo, com `additionalProperties: false`); `max_tokens` com folga (ex.: 2000). Instruções e base em `system`, com `cache_control` no último bloco fixo; pergunta e mensagem na mensagem do usuário.
 - T024: o Opus 5.5 não aceita desligar o raciocínio nem `tool_choice` forçado (usar a saída estruturada). Conferir `stop_reason` antes de ler a resposta: `refusal` e `max_tokens` viram falha. O esquema da API não limita tamanho nem valores: validar `answer` contra as opções e `reply` até 400 caracteres no conector.
 - T024: instruções num arquivo do repositório (ex.: `integrations/ai/anthropic/instructions.md`), usado pelo sub-workflow e pela avaliação; um teste confere que o JSON exportado usa o mesmo texto e o mesmo modelo.
-- T025: casos em `tests/fixtures/ai/`: escolha por texto livre, dúvida respondida pela base, dúvida fora da base, pedido de atendente, "parar", urgência de saúde e tentativa de mudar as instruções. Script com o SDK oficial `@anthropic-ai/sdk` (dependência justificada no commit), `ANTHROPIC_API_KEY` no `.env` (nome no `.env.example`) e relatório com acertos e custo da rodada; roda só quando pedido.
+- T024: intenção `urgent`, a primeira da ordem, e as regras de saúde de docs/arquitetura/ia.md nas instruções (D026). Com `urgent`, o fluxo ignora `reply`. Conferir à mão, com a IA de verdade, os casos 3, 7, 8, 9 e 11 de docs/arquitetura/demo-cenarios.md e anotar o resultado na validação.
+- T025 (depois da demo): casos em `tests/fixtures/ai/`: escolha por texto livre, dúvida respondida pela base, dúvida fora da base, pedido de atendente, "parar", urgência de saúde e tentativa de mudar as instruções. Script com o SDK oficial `@anthropic-ai/sdk` (dependência justificada no commit), `ANTHROPIC_API_KEY` no `.env` (nome no `.env.example`) e relatório com acertos e custo da rodada; roda só quando pedido.
 
 ### Handoff T009
 Concluído:
@@ -242,7 +314,21 @@ Arquivos principais:
 - clients/zenvolyx/config.json
 Próxima tarefa: T028
 Observações:
-- T027: o sub-workflow de aviso recebe cliente, tipo (erro, equipe chamada, falha de gravação) e uma referência técnica, nunca telefone, nome ou texto; destinatário e servidor de e-mail ficam no `.env` ou em credencial do n8n (nomes no `.env.example`). O fluxo de erro global do n8n usa o mesmo sub-workflow.
+- T027 (depois da demo): o sub-workflow de aviso recebe cliente, tipo (erro, equipe chamada, falha de gravação) e uma referência técnica, nunca telefone, nome ou texto; destinatário e servidor de e-mail ficam no `.env` ou em credencial do n8n (nomes no `.env.example`). O fluxo de erro global do n8n usa o mesmo sub-workflow.
 - T028: conversa como máquina de estados sobre a tabela da D020, com limpeza diária das linhas sem interação há 30 dias. Pergunta com até 3 opções vai em botões; de 4 a 10, em lista (botão "Ver opções"). Gravar no CRM no primeiro contato e a cada mudança de etapa (D017). Fixtures fictícias em `tests/fixtures/conversation/` e roteiro de verificação no README.
-- T029: lista com até 9 horários mais "Nenhum desses"; o `id` de cada linha aponta para o horário guardado no estado; `slot_taken` gera nova lista; `{slot}` em `messages.booked` recebe o `label` do horário.
-- Textos, regra e base da Zenvolyx são proposta: o dono revisa antes de ativar (clients/zenvolyx/README.md).
+- T028: `urgent` interrompe a conversa em qualquer etapa (D026): `messages.urgent` (T039), CRM `urgent` e pausa de 24 h; `stop` grava CRM `stopped`. Sem a T027, erros e chamadas da equipe vão para log sem dados pessoais, num ponto só, que a T027 depois troca pelo aviso.
+- T029: lista com até 9 horários mais "Nenhum desses"; o `id` de cada linha aponta para o horário guardado no estado; `slot_taken` envia `messages.slotTaken` (T039) e nova lista; `{slot}` em `messages.booked` recebe o `label` do horário.
+- A demo agora é a clínica fictícia (D025): testar T028 e T029 com `clients/odontologia-demo/` e os cenários de docs/arquitetura/demo-cenarios.md. Textos e regra são proposta: o dono revisa antes de ativar.
+
+### Handoff T037
+Concluído:
+- cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo), inativo, com tratamentos, primeira consulta, regra de novos pacientes e mensagens
+- regras de saúde (D026) e cenários da demo documentados na T036
+Arquivos principais:
+- clients/odontologia-demo/config.json
+- docs/arquitetura/demo-cenarios.md
+Próxima tarefa: T039
+Observações:
+- T039: `messages.urgent` e `messages.slotTaken` obrigatórias em todas as configs (modelo, Zenvolyx, clínica e fixtures de `tests/fixtures/clients/`). Texto de exemplo da urgência em docs/arquitetura/ia.md (Urgência); nas configs que não são de saúde, adaptar sem falar em dentista. `slotTaken`, por exemplo: "Esse horário acabou de ser ocupado. Veja outras opções:".
+- T038 e T040 (Claude) completam a config da clínica; o README dela diz o que falta em cada uma.
+- A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).
