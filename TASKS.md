@@ -12,8 +12,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID)
-  Depende: T007, T012 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md
+- [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID), chamando a Graph API pela porta do cliente
+  Depende: T007, T012, T033 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md, DECISIONS.md (D023)
 - [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
   Depende: T007, T012, T016 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
 - [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
@@ -40,15 +40,24 @@ Formato (linhas de baixo são opcionais):
   Depende: T020, T025, T029 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md
 - [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas)
   Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
+- [ ] T032 Especificar a produção antes do primeiro cliente real: servidor, domínio com HTTPS, backup e atualização de `clients/` e dos workflows
+  Depende: T012 | Sugerido: CLAUDE | Ref: DECISIONS.md (D006, D021), docs/arquitetura/whatsapp-cadastro.md
+- [ ] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente) e sub-workflow que cria credencial e porta pela API do n8n, publica e registra `clientId → porta`
+  Depende: T012, T017 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
+- [ ] T034 Criar o fluxo de cadastro `automations/whatsapp-onboarding/`: convite, página do cadastro incorporado v4 com coexistência, troca do código em até 30 s, porta do cliente, webhooks da conta, sincronização e aviso
+  Depende: T027, T032, T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
 
 ## Em andamento
 
-- [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h [CLAUDE]
-  Depende: T007 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Contas e acesso), DECISIONS.md (D015)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
+  Ref: docs/arquitetura/whatsapp-cadastro.md, DECISIONS.md (D023, que substitui a D015)
+  Validação: regras da Meta conferidas na documentação oficial em 2026-09 (Tech Provider, revisão do app, cadastro incorporado v4, coexistência e tokens); `npm test` (124 testes), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram; 29 links locais e 8 da Meta válidos.
 
 - [x] T016 Criar o sub-workflow `automations/load-client-config/`, que acha o cliente ativo pelo `phoneNumberId` e devolve a config
   Ref: automations/load-client-config/README.md, DECISIONS.md (D022)
@@ -147,6 +156,21 @@ Observações:
 - O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
 - Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a Zenvolyx; `npm run check:clients` valida antes de publicar.
 
+### Handoff T017
+Concluído:
+- cadastro de clientes reais especificado em docs/arquitetura/whatsapp-cadastro.md; D023 substitui a D015
+- contrato do conector de WhatsApp com `clientId` e chamadas pela porta do cliente
+Arquivos principais:
+- docs/arquitetura/whatsapp-cadastro.md
+- DECISIONS.md (D023)
+Próxima tarefa: T033
+Observações:
+- T033: porta = Execute Workflow Trigger → HTTP Request para `https://graph.facebook.com/v25.0` + `path` recebido, com a credencial do cliente (Header Auth, `Authorization: Bearer ...`); recusar `path` que não comece com `/` ou que aponte para outro host; devolver `{ status, body }` sem registrar o corpo. Tabela interna `clientId → ID da porta`. Criação pela API pública do n8n (credencial, workflow e publicação), com a chave da API numa credencial; conferir os endpoints na versão 2.40.5. A porta da Zenvolyx para a demo pode ser criada à mão, com passo a passo no README.
+- T033 e T034: workflows que manipulam token não salvam dados de execução, nem em erro (configuração do workflow).
+- T018: o contrato ganhou `clientId`; sem porta, `no_gateway`; token recusado, `auth` (D023).
+- T019: `history`, `smb_app_state_sync` e `account_update` chegam no mesmo webhook; confirmar e descartar (D013).
+- T034 depende da produção (T032) e das aprovações da Meta, listadas em docs/arquitetura/whatsapp-cadastro.md (Pré-requisitos).
+
 ### Handoff T007
 Concluído:
 - abordagem do WhatsApp em docs/arquitetura/whatsapp.md; contrato do conector em integrations/whatsapp/README.md
@@ -156,6 +180,7 @@ Arquivos principais:
 - integrations/whatsapp/README.md
 Próxima tarefa: T018
 Observações:
+- A D015 foi substituída pela D023 (T017): não há credencial única; o conector chama a Graph API pela porta do cliente (ver Handoff T017).
 - O lead é identificado pelo BSUID (`from_user_id` / `user_id`); o telefone pode não vir. Envio pelo campo `recipient`.
 - T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição.
 - T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013).
