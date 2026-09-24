@@ -29,6 +29,7 @@ Exemplo completo: [`_template/config.json`](_template/config.json).
 | `timezone` | sim | Fuso do cliente no padrão IANA (ex.: `America/Sao_Paulo`), usado em horários e datas. |
 | `active` | sim | `false` faz a entrada ignorar o cliente. Modelos (pastas com `_`) ficam sempre `false`. |
 | `whatsapp.phoneNumberId` | sim | ID do número na Meta, em texto. A entrada acha o cliente por ele; não pode repetir entre clientes ativos. |
+| `whatsapp.gatewayWorkflowId` | sim | ID do workflow da porta do cliente no n8n, com 16 letras e números ([porta do cliente](../integrations/whatsapp/client-gateway/README.md), D024). |
 | `crm` | sim | Onde o lead é gravado: `provider` e `settings` (IDs de recursos, nunca tokens). Hoje só `google-sheets`, com `settings.spreadsheetId`; detalhes em [integrations/crm](../integrations/crm/README.md). |
 | `calendar` | não | Agenda onde a automação marca: `provider` e `settings` (IDs de recursos, nunca tokens). Hoje só `google-calendar`, com `settings.calendarId`; detalhes em [integrations/calendar](../integrations/calendar/README.md). Sem `calendar`, o lead qualificado vai para a equipe. |
 | `scheduling` | com `calendar` | Regras de horário: `durationMinutes`, `minNoticeHours` (antecedência mínima), `daysAhead` (até quantos dias à frente), `hours` (chaves `mon` a `sun`, cada uma com faixas `"HH:MM-HH:MM"`; dia ausente é dia fechado) e, opcional, `serviceQuestion` (pergunta `choice` cuja resposta vira o serviço do evento). |
@@ -52,7 +53,8 @@ Regras do conteúdo:
 1. Copiar `_template/` para `clients/<id>/` e trocar o `id` pelo nome da pasta.
 2. Preencher `config.json` e o README, com `active: false`.
 3. Conceder os acessos que cada conector pede (ex.: compartilhar a planilha com a conta da
-   agência), conforme o README do conector.
+   agência), conforme o README do conector, e pôr o ID da porta do WhatsApp em
+   `whatsapp.gatewayWorkflowId` ([porta do cliente](../integrations/whatsapp/client-gateway/README.md)).
 4. Rodar `npm run check:clients` (ou `npm test`, que também valida as configs) e testar com um lead fictício.
 5. Trocar para `active: true`, fazer commit e atualizar a pasta no servidor.
 
@@ -75,6 +77,7 @@ Além dos tipos e campos obrigatórios, confere:
 
 - ID igual ao nome da pasta, sem espaços nas bordas; modelo com prefixo `_` inativo;
 - IDs de WhatsApp únicos entre ativos e nenhum `PREENCHER` nos IDs de recursos de clientes ativos;
+- ID da porta de clientes ativos com 16 letras e números, o formato que o n8n consegue chamar;
 - IDs de perguntas únicos e de opções únicos dentro de cada pergunta, limites das opções
   e regras que citam perguntas/opções existentes; `number` exige `min` e/ou `max`, com `min <= max`;
 - fuso IANA, agenda com regras de horário, faixas em ordem crescente e sem sobreposição

@@ -18,7 +18,8 @@ equipe.
 ## Ativação
 
 - [ ] textos, regra e base revisados pelo dono
-- [ ] `phoneNumberId`, `spreadsheetId` e `calendarId` preenchidos no lugar de `PREENCHER`
+- [ ] porta do WhatsApp criada à mão com o token da Zenvolyx ([passo a passo](../../integrations/whatsapp/client-gateway/README.md))
+- [ ] `phoneNumberId`, `gatewayWorkflowId`, `spreadsheetId` e `calendarId` preenchidos no lugar de `PREENCHER`
 - [ ] planilha e agenda compartilhadas com a conta de serviço
 - [ ] `npm test` passando e teste de ponta a ponta com o celular do dono (T030)
 - [ ] `active: true` e commit

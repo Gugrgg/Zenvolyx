@@ -191,6 +191,9 @@ Trocando `list:workflow` por:
 Não há comando para apagar workflow: workflows de teste ficam arquivados e são apagados
 pelo editor.
 
+IDs de workflow precisam ter 16 letras e números. Um ID em outro formato é importado e
+publicado, mas não pode ser chamado como sub-workflow (D024).
+
 ## Referências
 
 - [Release fixa do n8n](https://github.com/n8n-io/n8n/releases/tag/n8n%402.40.5) e [Data tables nessa versão](https://github.com/n8n-io/n8n/blob/n8n%402.40.5/packages/%40n8n/config/src/configs/data-table.config.ts).

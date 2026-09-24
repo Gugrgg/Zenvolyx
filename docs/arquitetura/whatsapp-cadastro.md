@@ -58,8 +58,8 @@ de nada disto.
 1. Confere o convite e o marca como usado.
 2. Troca o código pelo token do cliente: `GET /oauth/access_token` com `client_id`, `code` e o
    `client_secret`, que fica numa credencial do n8n.
-3. Cria a credencial e a porta do cliente pela API do n8n, publica a porta e registra
-   `clientId → porta` numa tabela interna.
+3. Cria a credencial e a porta do cliente pela API do n8n (T035) e publica a porta; o ID dela
+   vai no aviso à agência, para entrar na config do cliente (D024).
 4. Pela porta, assina os webhooks da conta: `POST /<WABA_ID>/subscribed_apps`.
 5. Com coexistência, o número não é registrado de novo, porque já está no app. O fluxo pede a
    sincronização em `POST /<PHONE_NUMBER_ID>/smb_app_data`, primeiro com `sync_type`
@@ -67,7 +67,7 @@ de nada disto.
    desconectar o cliente. O histórico que chega pelo webhook não é guardado (D013). Se o cliente
    não compartilhar o histórico, a Meta avisa com o erro 2593109, e o cadastro segue.
    Com número novo, sem app: registrar em `POST /<PHONE_NUMBER_ID>/register` com PIN de 6 dígitos.
-6. Avisa a agência (T027) com cliente, `phoneNumberId` e `wabaId`, nunca com o token.
+6. Avisa a agência (T027) com cliente, `phoneNumberId`, `wabaId` e o ID da porta, nunca com o token.
 
 O workflow de cadastro não salva dados de execução, nem em erro, porque o token passa por ele.
 Falha em qualquer passo gera aviso à agência, que manda um convite novo.
@@ -75,7 +75,8 @@ Falha em qualquer passo gera aviso à agência, que manda um convite novo.
 ## Depois do cadastro
 
 - O cliente cadastra a forma de pagamento no WhatsApp Manager; sem ela, o cadastro não termina.
-- A agência preenche `whatsapp.phoneNumberId` em `clients/<id>/config.json`, valida com
+- A agência preenche `whatsapp.phoneNumberId` e `whatsapp.gatewayWorkflowId` em
+  `clients/<id>/config.json`, valida com
   `npm run check:clients`, testa com lead fictício e ativa o cliente.
 - Avisar o cliente sobre os limites da coexistência ([whatsapp.md](whatsapp.md)).
 
@@ -86,9 +87,11 @@ Falha em qualquer passo gera aviso à agência, que manda um convite novo.
   portfólio da Zenvolyx; por isso o token da própria agência não a alcança.
 - Os nós do n8n não escolhem credencial durante a execução (D014). Por isso cada cliente tem uma
   porta: sub-workflow com um nó HTTP Request usando a credencial dele. Entrada
-  `{ "method", "path", "body" }`, com `path` relativo a `https://graph.facebook.com/v25.0` (a porta
-  recusa outro destino); saída `{ "status", "body" }`.
-- O conector de WhatsApp (T018) acha a porta pelo `clientId` na tabela e chama por ela.
+  `{ "method", "path", "query", "body" }`, com `path` relativo a `https://graph.facebook.com/v25.0`
+  (a porta recusa outro destino); saída `{ "status", "body" }`
+  ([modelo](../../integrations/whatsapp/client-gateway/README.md)).
+- O conector de WhatsApp (T018) chama a porta pelo `whatsapp.gatewayWorkflowId` da config do
+  cliente (D024).
 - A Zenvolyx, na demo, usa o mesmo desenho: porta criada à mão com o token de usuário do sistema
   da própria agência.
 - Erro de autenticação (token revogado ou vencido; a Meta não informa validade) gera aviso à
@@ -99,8 +102,9 @@ Falha em qualquer passo gera aviso à agência, que manda um convite novo.
 | Tarefa | Quem | O quê |
 |--------|------|-------|
 | T032 | Claude | Especificar a produção: servidor, domínio com HTTPS, backup e atualização |
-| T033 | Codex | Porta do cliente: modelo e sub-workflow que cria credencial e porta pela API do n8n |
+| T033 | Codex | Porta do cliente: modelo, ID na config e criação à mão |
 | T018 | Codex | Conector de WhatsApp chamando a Graph API pela porta do cliente |
+| T035 | Codex | Criação automática da porta pela API do n8n |
 | T034 | Codex | Fluxo de cadastro: convite, página, troca do código, porta, webhooks, sincronização e aviso |
 
 ## Referências
