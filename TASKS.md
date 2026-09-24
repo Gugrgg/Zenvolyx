@@ -47,7 +47,10 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T036 [CLAUDE] Repriorizar o projeto para a demo odontológica e o primeiro cliente pagante: objetivo, caminho da demo, fase comercial, dependências, regras de saúde e cenários
+  Sugerido: CLAUDE | Ref: DECISIONS.md, docs/arquitetura/demo.md
+- [ ] T037 [CLAUDE] Criar o cliente fictício `clients/odontologia-demo/`: procedimentos, pergunta de primeira consulta, regra de novos pacientes e mensagens, com config inativa e README
+  Depende: T015 | Sugerido: CLAUDE | Ref: clients/README.md
 
 ## Concluído
 
