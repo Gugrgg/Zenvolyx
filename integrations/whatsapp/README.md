@@ -11,7 +11,8 @@ Um item JSON por chamada ao sub-workflow:
 | Campo | Ações | Conteúdo |
 |-------|-------|----------|
 | `action` | todas | `sendText`, `sendButtons`, `sendList`, `sendTemplate` ou `markRead`. |
-| `clientId` | todas | Cliente que envia; o conector acha a porta dele (D023). |
+| `clientId` | todas | Cliente que envia, usado em logs e alertas. |
+| `gatewayWorkflowId` | todas | ID da porta do cliente (`whatsapp.gatewayWorkflowId` da config, D024). |
 | `phoneNumberId` | todas | Número do cliente que envia (`whatsapp.phoneNumberId` da config). |
 | `leadId` | envios | BSUID do lead; o conector envia pelo campo `recipient`. |
 | `text` | `sendText`, `sendButtons`, `sendList` | Texto da mensagem. |
@@ -30,10 +31,9 @@ Um item JSON por chamada ao sub-workflow:
 
 - Tenta de novo sozinho em erro temporário (limite de taxa, erro 5xx) antes de devolver falha.
 - Chama a Graph API pela porta do cliente (D023): o conector monta método, caminho e corpo, e a
-  porta, que tem a credencial do cliente, faz a chamada
-  ([porta do cliente](../../docs/arquitetura/whatsapp-cadastro.md#token-e-porta-do-cliente-d023)).
-  Sem porta para o `clientId`, devolve `code` `no_gateway`; token recusado pela Meta, `auth`. Os
-  dois vêm com `retryable` `false`.
+  porta, que tem a credencial do cliente, faz a chamada ([porta do cliente](client-gateway/README.md)).
+  Porta inexistente ou não publicada devolve `code` `no_gateway`; token recusado pela Meta, `auth`.
+  Os dois vêm com `retryable` `false`.
 - Versão da Graph API fixa (v25.0 em 2026-09), atualizada de propósito.
 - Não registra texto de mensagem, BSUID nem telefone; erros levam cliente, ação e código.
 

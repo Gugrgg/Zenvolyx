@@ -14,6 +14,7 @@ nada de contatos pessoais, contrato ou preços.
 
 - [ ] `config.json` preenchido, com `active: false`
 - [ ] acessos concedidos em cada conector
+- [ ] porta do WhatsApp criada e ID em `whatsapp.gatewayWorkflowId`
 - [ ] `npm test` passando e teste com lead fictício
 - [ ] `active: true`, commit e pasta atualizada no servidor
 

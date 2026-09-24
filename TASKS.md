@@ -42,10 +42,10 @@ Formato (linhas de baixo são opcionais):
   Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
 - [ ] T032 Especificar a produção antes do primeiro cliente real: servidor, domínio com HTTPS, backup e atualização de `clients/` e dos workflows
   Depende: T012 | Sugerido: CLAUDE | Ref: DECISIONS.md (D006, D021), docs/arquitetura/whatsapp-cadastro.md
-- [ ] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente) e sub-workflow que cria credencial e porta pela API do n8n, publica e registra `clientId → porta`
-  Depende: T012, T017 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
 - [ ] T034 Criar o fluxo de cadastro `automations/whatsapp-onboarding/`: convite, página do cadastro incorporado v4 com coexistência, troca do código em até 30 s, porta do cliente, webhooks da conta, sincronização e aviso
-  Depende: T027, T032, T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
+  Depende: T027, T032, T035 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
+- [ ] T035 Criar a porta do cliente automaticamente pela API do n8n (credencial, workflow a partir do modelo e publicação), para o fluxo de cadastro
+  Depende: T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
 
 ## Em andamento
 
@@ -54,6 +54,10 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente), ID da porta na config do cliente e passo a passo para criar a porta à mão
+  Ref: integrations/whatsapp/client-gateway/README.md, DECISIONS.md (D024)
+  Validação: no n8n 2.40.5 local, uma porta de teste com credencial fictícia chamou `GET /me` e recebeu 401 com erro 190 da Meta; quatro pedidos inválidos foram recusados sem sair do n8n; um ID com hífen foi importado e publicado, mas não pôde ser chamado (D024). `npm test` (145 testes, 21 novos), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram.
 
 - [x] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
   Ref: docs/arquitetura/whatsapp-cadastro.md, DECISIONS.md (D023, que substitui a D015)
@@ -156,20 +160,19 @@ Observações:
 - O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
 - Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a Zenvolyx; `npm run check:clients` valida antes de publicar.
 
-### Handoff T017
+### Handoff T033
 Concluído:
-- cadastro de clientes reais especificado em docs/arquitetura/whatsapp-cadastro.md; D023 substitui a D015
-- contrato do conector de WhatsApp com `clientId` e chamadas pela porta do cliente
+- modelo da porta em integrations/whatsapp/client-gateway/ (importado no n8n local, sem publicar); D024
+- `whatsapp.gatewayWorkflowId` na config, validado (16 letras e números em clientes ativos)
 Arquivos principais:
-- docs/arquitetura/whatsapp-cadastro.md
-- DECISIONS.md (D023)
-Próxima tarefa: T033
+- integrations/whatsapp/client-gateway/workflow.json
+- integrations/whatsapp/client-gateway/README.md
+Próxima tarefa: T018
 Observações:
-- T033: porta = Execute Workflow Trigger → HTTP Request para `https://graph.facebook.com/v25.0` + `path` recebido, com a credencial do cliente (Header Auth, `Authorization: Bearer ...`); recusar `path` que não comece com `/` ou que aponte para outro host; devolver `{ status, body }` sem registrar o corpo. Tabela interna `clientId → ID da porta`. Criação pela API pública do n8n (credencial, workflow e publicação), com a chave da API numa credencial; conferir os endpoints na versão 2.40.5. A porta da Zenvolyx para a demo pode ser criada à mão, com passo a passo no README.
-- T033 e T034: workflows que manipulam token não salvam dados de execução, nem em erro (configuração do workflow).
-- T018: o contrato ganhou `clientId`; sem porta, `no_gateway`; token recusado, `auth` (D023).
+- T018: o conector recebe `gatewayWorkflowId` e chama a porta pelo nó Execute Workflow com o ID por expressão ("Run once for each item"). Porta inexistente ou não publicada → `no_gateway`; status 401 ou `error.code` 190 → `auth` (D023). A porta de teste `t033GatewayTest1`, com credencial fictícia "T033 teste (pode apagar)", segue publicada no n8n local para testes; arquivar ao final.
+- T018: em lista, o título da linha vai até 24 caracteres (horários da agenda, D018); em botões, até 20.
 - T019: `history`, `smb_app_state_sync` e `account_update` chegam no mesmo webhook; confirmar e descartar (D013).
-- T034 depende da produção (T032) e das aprovações da Meta, listadas em docs/arquitetura/whatsapp-cadastro.md (Pré-requisitos).
+- T035 e T034: workflows que manipulam token não salvam dados de execução, nem em erro. A T034 depende da produção (T032) e das aprovações da Meta (docs/arquitetura/whatsapp-cadastro.md, Pré-requisitos).
 
 ### Handoff T007
 Concluído:
