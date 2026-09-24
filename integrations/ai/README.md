@@ -36,9 +36,9 @@ Saída: `{ "ok": true, "intent": "answer", "answer": "cleaning", "reply": "Ficam
 | `business` | `name` e `ai.knowledge` da config do cliente. |
 | `question` | Pergunta atual da config, ou `null` quando não há pergunta pendente. |
 | `message` | Texto do lead, com a rajada já agrupada. |
-| `intent` | `stop` (pediu para parar), `human` (quer atendente, relatou urgência ou perguntou algo fora da base), `answer` (respondeu a pergunta), `question` (tirou uma dúvida) ou `other`. Havendo mais de uma, vale a primeira desta ordem. |
+| `intent` | `urgent` (relatou urgência de saúde, D026), `stop` (pediu para parar), `human` (quer atendente ou perguntou algo que a base não cobre), `answer` (respondeu a pergunta), `question` (tirou uma dúvida) ou `other`. Havendo mais de uma, vale a primeira desta ordem. |
 | `answer` | Resposta à pergunta atual: o `id` da opção em `choice`, um número em `number`, um resumo em `text`; `null` se o lead não respondeu. Pode vir preenchido mesmo quando `intent` é `question`. |
-| `reply` | Texto curto para o lead (até 400 caracteres) ou `null`, só com informação da base. |
+| `reply` | Texto curto para o lead (até 400 caracteres) ou `null`, só com informação da base. Com `urgent`, o fluxo ignora `reply` e envia o texto fixo `messages.urgent`. |
 
 Falha: `{ "ok": false, "error": { "code": "...", "retryable": false } }`. Códigos: `invalid_output`
 (fora do esquema, `answer` fora das opções ou `reply` longo demais), `refusal` (a IA recusou) e
@@ -53,9 +53,13 @@ Falha: `{ "ok": false, "error": { "code": "...", "retryable": false } }`. Códig
   conversa (D019).
 - O texto do lead é dado, não instrução. Pedido para mudar de papel, revelar as instruções ou falar
   de outro assunto vira `other` ou `human`, sem sair das regras.
+- Regras de saúde (D026, [ia.md](../../docs/arquitetura/ia.md#regras-de-saúde-d026)): nada de
+  diagnóstico, interpretação de sintoma, tratamento, remédio, propaganda, nem preço, prazo ou
+  resultado fora da base. Na dúvida entre urgência e dúvida comum, `urgent`.
 - Não registra `message` nem `reply` em logs; métricas levam cliente, `intent` e tempo de resposta.
 - Modelo, esforço e instruções ficam num só lugar do repositório, usado pelo sub-workflow e pela
   avaliação (T025).
 
 Como testar: casos fictícios em `tests/fixtures/ai/` e a avaliação da T025, que chama a IA de
-verdade (com custo) e por isso fica fora do `npm test`.
+verdade (com custo) e por isso fica fora do `npm test`. Até a demo, os casos de saúde dos
+[cenários da demo](../../docs/arquitetura/demo-cenarios.md) são conferidos à mão (T024, T030).

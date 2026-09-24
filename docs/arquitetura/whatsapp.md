@@ -72,7 +72,7 @@ são mais claras e custam menos (ver Custos).
 
 - A equipe responde pelo app WhatsApp Business. Cada mensagem enviada pelo app chega como
   `smb_message_echoes`, e a automação pausa aquele lead por 24 h desde a última mensagem da equipe.
-- Ao enviar `handoff`, a automação também pausa o lead por 24 h.
+- Ao enviar `handoff` ou a mensagem de urgência (D026), a automação também pausa o lead por 24 h.
 - Em pausa, a automação não responde nem marca como lida.
 - Pedido para parar (ex.: "parar", "sair") fica registrado: nenhuma mensagem iniciada pela empresa
   vai mais para esse lead.

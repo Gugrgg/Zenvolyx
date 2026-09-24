@@ -8,10 +8,12 @@ Desenho técnico das automações, serviços e integrações.
   templates, custos e limites da coexistência (T007).
 - [Cadastro de clientes no WhatsApp](whatsapp-cadastro.md): pré-requisitos da Meta,
   convite, página, fluxo de cadastro, token e porta do cliente (T017).
-- [IA](ia.md): o que a IA faz e não faz, provedor, modelo, custo, dados, áudio e
-  avaliação (T011).
-- [Demo](demo.md): o que a demo mostra, roteiro da conversa, estado, preparação e
-  tarefas até a demo (T009).
+- [IA](ia.md): o que a IA faz e não faz, regras de saúde, provedor, modelo, custo,
+  dados, áudio e avaliação (T011, T036).
+- [Demo](demo.md): a clínica odontológica fictícia, o que a demo mostra, roteiro da
+  conversa, estado, preparação e tarefas até a demo (T009, T036).
+- [Cenários da demo](demo-cenarios.md): os casos que a demo precisa cumprir, usados
+  nos testes automáticos e no teste de ponta a ponta (T036).
 
 Como usar: consultar os documentos conforme a tarefa e registrar decisões
 no [DECISIONS.md](../../DECISIONS.md), sem duplicá-las aqui.

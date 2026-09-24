@@ -1,45 +1,58 @@
-# Demo da Zenvolyx
+# Demo: clínica odontológica fictícia
 
-A demo é a própria Zenvolyx como primeiro cliente: um dono de negócio chama no WhatsApp da
-Zenvolyx, a IA conversa e qualifica, a automação marca uma apresentação na agenda e registra o
-lead na planilha. Config: [clients/zenvolyx](../../clients/zenvolyx/README.md). Desenho geral:
-[visao-geral.md](visao-geral.md).
+A demo principal é a [Clínica Sorriso Demo](../../clients/odontologia-demo/README.md), uma clínica
+odontológica fictícia, com foco em novos pacientes (D025). O paciente chama no WhatsApp; o
+assistente entende o que ele quer, identifica o tratamento, tira dúvidas administrativas pela base
+da clínica, confirma se é a primeira consulta, oferece horários livres de verdade, marca a
+avaliação na agenda, registra tudo na planilha e confirma pelo WhatsApp. Pedido de atendente,
+dúvida fora da base e relato de urgência vão para a equipe, sem diagnóstico (D026).
 
-## O que a demo mostra
+Cenários que a demo precisa cumprir: [demo-cenarios.md](demo-cenarios.md). Desenho geral:
+[visao-geral.md](visao-geral.md). A config da própria Zenvolyx, que era a demo até a T036, fica
+inativa para testes internos ([clients/zenvolyx](../../clients/zenvolyx/README.md)).
 
-1. Mensagem escrita do jeito do lead é entendida pela IA, com as perguntas em botões e listas.
-2. Dúvida sobre a Zenvolyx é respondida pela base; pergunta de preço vai para a equipe, porque a
-   IA não inventa o que não está na base.
-3. Lead qualificado escolhe um horário livre de verdade, e o evento aparece no Google Agenda.
-4. O lead aparece na planilha com respostas, etapa e agendamento.
-5. Pedido de atendente pausa a automação para aquele lead.
+## O que a demo mostra, em poucos minutos
+
+1. O paciente escreve do jeito dele ("oi, queria ver implante") e o assistente entende, com as
+   perguntas em lista ou botões.
+2. Dúvida administrativa (endereço, funcionamento, pagamento, como é a avaliação) é respondida pela
+   base. Preço que não está na base não é inventado: o assistente explica que o valor sai na
+   avaliação e segue para o agendamento.
+3. Paciente novo escolhe um horário livre de verdade, e a avaliação aparece no Google Agenda.
+4. O paciente aparece na planilha com tratamento, etapa e horário marcado.
+5. Pedido para falar com uma pessoa, ou relato de dor forte ou inchaço, para a automação e chama a
+   equipe, sem diagnóstico nem remédio.
 6. Várias mensagens seguidas recebem uma resposta só.
 
 ## Roteiro da conversa
 
 1. **Primeiro contato.** Envia `messages.welcome`, grava o lead no CRM (etapa `talking`) e faz a
-   primeira pergunta. Se a primeira mensagem já responder a pergunta (ex.: "tenho uma clínica"), a
-   IA registra a resposta e a conversa pula para a seguinte.
+   primeira pergunta. Se a primeira mensagem já responder a pergunta (ex.: "quero fazer um
+   clareamento"), a IA registra a resposta e a conversa pula para a seguinte.
 2. **Perguntas.** Pergunta com até 3 opções vai em botões; de 4 a 10, em lista. Resposta por
    botão é registrada direto. Texto livre passa pela IA (D019): `answer` registra a resposta,
-   `reply` responde a dúvida antes de repetir ou seguir, `human` chama a equipe, `stop` encerra.
-   Sem resposta, a pergunta é repetida; na segunda vez seguida, a equipe é chamada.
+   `reply` responde a dúvida antes de repetir ou seguir, e `urgent`, `human` e `stop` seguem o
+   passo 6. Sem resposta, a pergunta é repetida; na segunda vez seguida, a equipe é chamada.
 3. **Qualificação.** Com todas as respostas, as regras da config decidem:
-   - não qualificado: `messages.notQualified`, CRM `not_qualified`, conversa encerrada;
+   - não qualificado (na clínica da demo, quem já é paciente): `messages.notQualified`, CRM
+     `not_qualified`, conversa encerrada;
    - qualificado: CRM `qualified` e agendamento.
 4. **Agendamento (D018).** `messages.chooseSlot` e uma lista com até 9 horários de `listSlots`, mais
    a opção "Nenhum desses", que chama a equipe. Com o horário escolhido, `book`: deu certo,
    `messages.booked` (`{slot}` vira o horário) e CRM `scheduled`; horário ocupado nesse meio-tempo,
-   nova lista. Sem horário livre: `messages.noSlots` e equipe.
+   `messages.slotTaken` e nova lista. Sem horário livre: `messages.noSlots` e equipe.
 5. **Depois de encerrada.** Nova mensagem do lead passa pela IA sem pergunta pendente: dúvida da
    base é respondida; pedido de remarcar, cancelar ou falar com alguém chama a equipe.
-6. **A qualquer momento.** `human`: `messages.handoff`, CRM `with_team`, pausa de 24 h (D016) e
-   aviso à agência. `stop`: `messages.stopped` e recusa registrada. Falha: `messages.failure` e
-   equipe.
+6. **A qualquer momento.**
+   - `urgent`: a conversa comercial para; `messages.urgent`, CRM `urgent` e pausa de 24 h (D026).
+   - `human`: `messages.handoff`, CRM `with_team` e pausa de 24 h (D016).
+   - `stop`: `messages.stopped`, recusa registrada e CRM `stopped`.
+   - Falha: `messages.failure` e equipe.
 
-Na demo, o número não está no app WhatsApp Business (sem coexistência), então "chamar a equipe" é
-o aviso à agência: o dono vê o contato na planilha e responde por outro canal. Com clientes em
-coexistência (D023), a equipe responde pelo próprio app.
+Na demo, chamar a equipe é deixar o lead na planilha com a etapa certa. O aviso por e-mail à
+agência fica para depois da demo (T027); até lá, erros vão para log sem dados pessoais. O número de
+teste não está no app WhatsApp Business (sem coexistência), então o dono faz o papel da equipe e
+responde por outro canal. Com clientes em coexistência (D023), a equipe responde pelo próprio app.
 
 ## Estado da conversa (D020)
 
@@ -53,29 +66,35 @@ Etapa 1, desenvolvimento e testes (custo só da IA):
 
 - n8n no computador (T012) e túnel ligado durante os testes.
 - App na Meta com o número de teste, e o seu celular cadastrado como destinatário de teste (T019).
-- Projeto no Google Cloud com a conta de serviço (Sheets e Calendar); planilha `Leads` e agenda da
-  Zenvolyx compartilhadas com ela (T021, T022).
+- Projeto no Google Cloud com a conta de serviço (Sheets e Calendar); planilha `Leads` e agenda de
+  demonstração da clínica compartilhadas com ela (T021, T022, T040).
 - Conta na Anthropic com chave da API e limite de gasto ([ia.md](ia.md)).
-- E-mail que recebe os avisos da agência (T027).
-- IDs preenchidos em `clients/zenvolyx/config.json` e `active: true`.
+- Porta do WhatsApp da clínica criada à mão com o token da Zenvolyx
+  ([passo a passo](../../integrations/whatsapp/client-gateway/README.md)).
+- IDs preenchidos em `clients/odontologia-demo/config.json` e `active: true` (T030).
 
-Etapa 2, mostrar para prospects:
+Etapa 2, prospects testando no próprio celular:
 
 - Número próprio da Zenvolyx (ex.: um chip novo) registrado direto na Cloud API, sem o app, porque a
   coexistência exige Tech Provider (D023, [whatsapp-cadastro.md](whatsapp-cadastro.md)). As
-  mensagens passam a ser cobradas (D007).
+  mensagens passam a ser cobradas (D007). Até lá, o dono mostra a demo no próprio celular ou em
+  vídeo (B003).
 
 ## Tarefas até a demo
 
-| Ordem | Tarefas | Quem | O quê |
-|-------|---------|------|-------|
-| 1 | T012 | Codex | n8n local |
-| 2 | T013, T014, T015 | Codex | verificações: workflows exportados, lint no Windows, configs |
-| 3 | T016, T033, T018, T021, T022, T024, T027 | Codex | config do cliente, porta do cliente, conectores (WhatsApp, CRM, agenda, IA) e avisos |
-| 4 | T019, T020 | Codex | entrada do WhatsApp, rajadas e pausa |
-| 5 | T028 | Codex | conversa e qualificação |
-| 6 | T029 | Codex | agendamento na conversa |
-| 7 | T025 | Codex | avaliação da IA |
-| 8 | T030 | Claude e dono | teste de ponta a ponta e roteiro de apresentação |
+Já prontos: n8n local, verificações, leitura da config, porta do cliente, conector de WhatsApp e a
+config da clínica (T012 a T018, T033, T037). Falta, na ordem do [TASKS.md](../../TASKS.md):
 
-Ficam fora da demo: clientes reais no WhatsApp (T017), lembretes (T023) e áudio (T026).
+| Ordem | Claude | Codex | O quê |
+|-------|--------|-------|-------|
+| 1 | T019, T021 | T022, T039, T024 | entrada do WhatsApp e CRM; agenda, mensagens de urgência e de horário ocupado, IA com as regras de saúde |
+| 2 | T020, T038, T040 | T028, T029 | rajadas e pausa, base da clínica e horários da demo; conversa e agendamento |
+| 3 | | T041 | cenários em testes automáticos |
+| 4 | T030, com o dono | | todos os cenários de ponta a ponta, com a IA de verdade |
+| 5 | T042 | | roteiro de apresentação |
+
+Com a T042 concluída, o desenvolvimento para e segue a fase comercial. Ficam para depois do
+primeiro cliente fechado: avaliação automatizada da IA (T025), avisos (T027), produção (T032),
+cadastro de clientes reais (T034, T035), lembretes (T023), áudio (T026), limpeza automática do
+export (T031) e remarcação pelo WhatsApp (T043). A implantação do primeiro cliente (B012) exige
+T025, T027, T032 e o cadastro do número dele.

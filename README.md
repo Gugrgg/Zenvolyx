@@ -4,6 +4,9 @@ Agência de automação com IA para negócios de serviço que vendem pelo WhatsA
 com agendamento. Este repositório reúne as automações (n8n), as integrações (WhatsApp, CRM)
 e a configuração de cada cliente.
 
+Objetivo atual: conseguir o primeiro cliente odontológico pagando pela Zenvolyx, com uma demo
+numa clínica fictícia (D025). Prioridades e fase comercial no [TASKS.md](TASKS.md).
+
 ## Desenvolvimento
 
 Pré-requisitos: Node.js 24 LTS com npm. Na raiz do repositório, `npm ci` instala
