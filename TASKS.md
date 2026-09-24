@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID), chamando a Graph API pela porta do cliente
-  Depende: T007, T012, T033 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md, DECISIONS.md (D023)
 - [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
   Depende: T007, T012, T016 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
 - [ ] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, pedido para parar)
@@ -54,6 +52,10 @@ _(vazio)_
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID), chamando a Graph API pela porta do cliente
+  Ref: integrations/whatsapp/cloud-api/README.md, integrations/whatsapp/README.md
+  Validação: no n8n 2.40.5 local, seis casos com uma porta de teste de token fictício: texto, lista e "marcar como lida" chegaram à Meta e voltaram como `auth` (código 190); quatro botões deram `invalid_input`; porta inexistente, `no_gateway`; porta que falha de propósito, `unavailable` depois da nova tentativa. O corpo do indicador de digitação foi conferido na documentação da Meta. `npm test` (178 testes, 33 novos), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram. Envio de verdade pendente de token válido (T030).
 
 - [x] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente), ID da porta na config do cliente e passo a passo para criar a porta à mão
   Ref: integrations/whatsapp/client-gateway/README.md, DECISIONS.md (D024)
@@ -160,19 +162,20 @@ Observações:
 - O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
 - Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a Zenvolyx; `npm run check:clients` valida antes de publicar.
 
-### Handoff T033
+### Handoff T018
 Concluído:
-- modelo da porta em integrations/whatsapp/client-gateway/ (importado no n8n local, sem publicar); D024
-- `whatsapp.gatewayWorkflowId` na config, validado (16 letras e números em clientes ativos)
+- conector `whatsappCloudApi` em integrations/whatsapp/cloud-api/, publicado no n8n local
+- contrato de WhatsApp completo: códigos de erro, limites de rótulo e nova tentativa
 Arquivos principais:
-- integrations/whatsapp/client-gateway/workflow.json
-- integrations/whatsapp/client-gateway/README.md
-Próxima tarefa: T018
+- integrations/whatsapp/cloud-api/workflow.json
+- integrations/whatsapp/README.md
+Próxima tarefa: T028
 Observações:
-- T018: o conector recebe `gatewayWorkflowId` e chama a porta pelo nó Execute Workflow com o ID por expressão ("Run once for each item"). Porta inexistente ou não publicada → `no_gateway`; status 401 ou `error.code` 190 → `auth` (D023). A porta de teste `t033GatewayTest1`, com credencial fictícia "T033 teste (pode apagar)", segue publicada no n8n local para testes; arquivar ao final.
-- T018: em lista, o título da linha vai até 24 caracteres (horários da agenda, D018); em botões, até 20.
+- T028 e T029: chamar pelo nó Execute Workflow (ID `whatsappCloudApi`, "Run once for each item"), com `clientId`, `gatewayWorkflowId` e `phoneNumberId` da config, mais os campos da ação. `auth` e `no_gateway` geram aviso à agência (T027); `outside_window` exige template.
+- Envio de verdade ainda não foi testado: falta token válido e número de teste da Meta (T030). A porta da Zenvolyx é criada à mão (integrations/whatsapp/client-gateway/README.md).
 - T019: `history`, `smb_app_state_sync` e `account_update` chegam no mesmo webhook; confirmar e descartar (D013).
 - T035 e T034: workflows que manipulam token não salvam dados de execução, nem em erro. A T034 depende da produção (T032) e das aprovações da Meta (docs/arquitetura/whatsapp-cadastro.md, Pré-requisitos).
+- No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além da credencial fictícia "T033 teste (pode apagar)"; podem ser apagados pelo editor.
 
 ### Handoff T007
 Concluído:
