@@ -42,14 +42,15 @@ Formato (linhas de baixo são opcionais):
   Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
 - [ ] T032 Especificar a produção antes do primeiro cliente real: servidor, domínio com HTTPS, backup e atualização de `clients/` e dos workflows
   Depende: T012 | Sugerido: CLAUDE | Ref: DECISIONS.md (D006, D021), docs/arquitetura/whatsapp-cadastro.md
-- [ ] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente) e sub-workflow que cria credencial e porta pela API do n8n, publica e registra `clientId → porta`
-  Depende: T012, T017 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
 - [ ] T034 Criar o fluxo de cadastro `automations/whatsapp-onboarding/`: convite, página do cadastro incorporado v4 com coexistência, troca do código em até 30 s, porta do cliente, webhooks da conta, sincronização e aviso
-  Depende: T027, T032, T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
+  Depende: T027, T032, T035 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md
+- [ ] T035 Criar a porta do cliente automaticamente pela API do n8n (credencial, workflow a partir do modelo e publicação), para o fluxo de cadastro
+  Depende: T033 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T033 Criar a porta do cliente: modelo `integrations/whatsapp/client-gateway/` (HTTP Request para a Graph API com a credencial do cliente), ID da porta na config do cliente e passo a passo para criar a porta à mão [CLAUDE]
+  Depende: T012, T017 | Sugerido: CODEX | Ref: docs/arquitetura/whatsapp-cadastro.md (Token e porta do cliente), DECISIONS.md (D023)
 
 ## Concluído
 
