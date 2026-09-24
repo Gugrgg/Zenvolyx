@@ -121,14 +121,19 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T036 [CLAUDE] Repriorizar o projeto para a demo odontológica e o primeiro cliente pagante: objetivo, caminho da demo, fase comercial, dependências, regras de saúde e cenários
-  Sugerido: CLAUDE | Ref: DECISIONS.md, docs/arquitetura/demo.md
-- [ ] T037 [CLAUDE] Criar o cliente fictício `clients/odontologia-demo/`: procedimentos, pergunta de primeira consulta, regra de novos pacientes e mensagens, com config inativa e README
-  Depende: T015 | Sugerido: CLAUDE | Ref: clients/README.md
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T036 Repriorizar o projeto para a demo odontológica e o primeiro cliente pagante: objetivo, caminho da demo, fase comercial, dependências, regras de saúde e cenários
+  Ref: TASKS.md (Objetivo atual), DECISIONS.md (D025, D026), docs/arquitetura/demo.md, docs/arquitetura/demo-cenarios.md, docs/arquitetura/ia.md (Regras de saúde)
+  Validação: dependências conferidas por script temporário: nenhuma tarefa do caminho da demo depende de "depois da demo" ou da fase comercial, e não há ciclo, ID repetido nem tarefa antes da própria dependência. Regra de publicidade odontológica (art. 44, I) conferida no site do CRO-SC em 2026-09. `npm test` (178 testes), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram; 42 links locais válidos.
+
+- [x] T037 Criar o cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo): tratamentos, pergunta de primeira consulta, regra de novos pacientes e mensagens, com config inativa e README
+  Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo.md
+  Validação: `npm run check:clients` (3 configs) e `npm test` passaram. A config fica inativa, com `PREENCHER` nos IDs, até a T030; base da IA, mensagens novas e agenda entram nas T038, T039 e T040.
 
 - [x] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID), chamando a Graph API pela porta do cliente
   Ref: integrations/whatsapp/cloud-api/README.md, integrations/whatsapp/README.md
@@ -314,3 +319,16 @@ Observações:
 - T028: `urgent` interrompe a conversa em qualquer etapa (D026): `messages.urgent` (T039), CRM `urgent` e pausa de 24 h; `stop` grava CRM `stopped`. Sem a T027, erros e chamadas da equipe vão para log sem dados pessoais, num ponto só, que a T027 depois troca pelo aviso.
 - T029: lista com até 9 horários mais "Nenhum desses"; o `id` de cada linha aponta para o horário guardado no estado; `slot_taken` envia `messages.slotTaken` (T039) e nova lista; `{slot}` em `messages.booked` recebe o `label` do horário.
 - A demo agora é a clínica fictícia (D025): testar T028 e T029 com `clients/odontologia-demo/` e os cenários de docs/arquitetura/demo-cenarios.md. Textos e regra são proposta: o dono revisa antes de ativar.
+
+### Handoff T037
+Concluído:
+- cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo), inativo, com tratamentos, primeira consulta, regra de novos pacientes e mensagens
+- regras de saúde (D026) e cenários da demo documentados na T036
+Arquivos principais:
+- clients/odontologia-demo/config.json
+- docs/arquitetura/demo-cenarios.md
+Próxima tarefa: T039
+Observações:
+- T039: `messages.urgent` e `messages.slotTaken` obrigatórias em todas as configs (modelo, Zenvolyx, clínica e fixtures de `tests/fixtures/clients/`). Texto de exemplo da urgência em docs/arquitetura/ia.md (Urgência); nas configs que não são de saúde, adaptar sem falar em dentista. `slotTaken`, por exemplo: "Esse horário acabou de ser ocupado. Veja outras opções:".
+- T038 e T040 (Claude) completam a config da clínica; o README dela diz o que falta em cada uma.
+- A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).
