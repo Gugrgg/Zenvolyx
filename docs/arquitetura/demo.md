@@ -39,7 +39,7 @@ lead na planilha. Config: [clients/zenvolyx](../../clients/zenvolyx/README.md). 
 
 Na demo, o número não está no app WhatsApp Business (sem coexistência), então "chamar a equipe" é
 o aviso à agência: o dono vê o contato na planilha e responde por outro canal. Com clientes em
-coexistência (D015), a equipe responde pelo próprio app.
+coexistência (D023), a equipe responde pelo próprio app.
 
 ## Estado da conversa (D020)
 
@@ -62,7 +62,8 @@ Etapa 1, desenvolvimento e testes (custo só da IA):
 Etapa 2, mostrar para prospects:
 
 - Número próprio da Zenvolyx (ex.: um chip novo) registrado direto na Cloud API, sem o app, porque a
-  coexistência exige Tech Provider (D015, T017). As mensagens passam a ser cobradas (D007).
+  coexistência exige Tech Provider (D023, [whatsapp-cadastro.md](whatsapp-cadastro.md)). As
+  mensagens passam a ser cobradas (D007).
 
 ## Tarefas até a demo
 
@@ -70,7 +71,7 @@ Etapa 2, mostrar para prospects:
 |-------|---------|------|-------|
 | 1 | T012 | Codex | n8n local |
 | 2 | T013, T014, T015 | Codex | verificações: workflows exportados, lint no Windows, configs |
-| 3 | T016, T018, T021, T022, T024, T027 | Codex | config do cliente, conectores (WhatsApp, CRM, agenda, IA) e avisos |
+| 3 | T016, T033, T018, T021, T022, T024, T027 | Codex | config do cliente, porta do cliente, conectores (WhatsApp, CRM, agenda, IA) e avisos |
 | 4 | T019, T020 | Codex | entrada do WhatsApp, rajadas e pausa |
 | 5 | T028 | Codex | conversa e qualificação |
 | 6 | T029 | Codex | agendamento na conversa |

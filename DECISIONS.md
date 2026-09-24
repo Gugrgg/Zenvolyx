@@ -100,7 +100,7 @@ Decisão: Os fluxos seguem os mesmos para todos os clientes. Cada cliente tem `c
 Consequências: Cliente novo é pasta nova mais acessos concedidos, sem copiar fluxo. Config alterada vale depois do commit e da atualização da pasta no servidor, sem reiniciar o n8n.
 
 ## D015 WhatsApp: número do cliente, agência como Tech Provider
-Data: 2026-09-23 | Status: Aceita | Tarefa: T007
+Data: 2026-09-23 | Status: Substituída por D023 | Tarefa: T007
 Contexto: A D007 definiu a Cloud API, mas não de quem é a conta. A Meta só deixa parceiros operarem contas que o cliente compartilha, e a coexistência (app WhatsApp Business e API no mesmo número) exige que o parceiro seja Tech Provider.
 Decisão: Cada cliente é dono do número e da conta (WABA) e paga as mensagens na Meta. Ele conecta o número pelo cadastro incorporado (Embedded Signup v4) com coexistência e continua usando o app. A Zenvolyx vira Tech Provider e usa uma credencial única (usuário do sistema) para todas as contas compartilhadas (D014). Desenvolvimento e demo usam o app da agência com o número de teste.
 Consequências: Antes do primeiro cliente real, a agência precisa de verificação na Meta, app aprovado com acesso avançado e página de cadastro (T017). O cliente pode sair levando o número.
@@ -146,3 +146,9 @@ Data: 2026-09-23 | Status: Aceita | Tarefa: T016
 Contexto: Fluxos chamam sub-workflows pelo ID. O export da CLI do n8n traz campos da instância: projeto e dono em `shared`, versões, datas e `pinData: null`, que a T013 bloqueia.
 Decisão: Cada workflow do repositório tem um `id` fixo e legível no JSON (ex.: `loadClientConfig`), mantido na importação, e quem chama usa esse ID. O JSON guardado tem só `id`, `name`, `nodes`, `connections`, `settings` e `active`. Sub-workflows ficam com `active: true` e são publicados depois de importar, porque o n8n 2.x só chama sub-workflow publicado.
 Consequências: A mesma referência vale em qualquer instância, local ou de produção. Depois de editar no n8n, o export precisa ser limpo antes do commit (automatizar na T031); publicar pela CLI exige reiniciar o n8n para valer no servidor.
+
+## D023 WhatsApp: token por cliente e porta do cliente no n8n
+Data: 2026-09-24 | Status: Aceita | Tarefa: T017
+Contexto: Substitui a D015. A documentação da Meta (2026-09) mostra que, no cadastro incorporado de Tech Provider, a conta do WhatsApp continua só do cliente e o acesso é por um token do cliente (business integration system user), trocado a partir de um código que vale 30 segundos; o token da própria agência não alcança essas contas.
+Decisão: Continua da D015: número e conta (WABA) do cliente, que paga as mensagens; cadastro incorporado v4 com coexistência; a Zenvolyx como Tech Provider; desenvolvimento e demo com número da agência. Muda: o fluxo de cadastro troca o código pelo token do cliente e o guarda como credencial do n8n só daquele cliente; cada cliente tem uma porta, sub-workflow criado pela API do n8n que é o único lugar com essa credencial e faz as chamadas à Graph API. O conector de WhatsApp acha a porta pelo `clientId`.
+Consequências: O token não aparece nos dados de execução, porque o fluxo de cadastro não salva execuções. Cadastrar clientes exige produção com domínio e HTTPS (T032), chave da API do n8n e as aprovações da Meta. A Zenvolyx segue o mesmo desenho na demo, com o token da própria agência.

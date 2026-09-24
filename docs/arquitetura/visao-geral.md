@@ -32,7 +32,7 @@ flowchart LR
 | Fluxos principais | `automations/<nome>/` | As etapas do lead (abaixo), em JSON exportado do n8n. |
 | Conectores | `integrations/<tipo>/<fornecedor>/` | Sub-workflows do n8n que falam com WhatsApp, CRM, agenda ou IA. O contrato de entrada e saída de cada tipo fica em `integrations/<tipo>/README.md`; os fluxos chamam o contrato, nunca o fornecedor direto (D011). |
 | Config do cliente | `clients/<id>/config.json` | Tudo que muda por cliente: perguntas, regras de qualificação, mensagens e conectores usados, sem secrets (D014; formato no [clients/README.md](../../clients/README.md)). |
-| Credenciais | cofre do n8n | De preferência, uma credencial da agência por fornecedor, com acesso concedido pelo cliente (D014). Nunca no repositório. |
+| Credenciais | cofre do n8n | De preferência, uma credencial da agência por fornecedor, com acesso concedido pelo cliente (D014); no WhatsApp, uma por cliente, usada só pela porta dele (D023). Nunca no repositório. |
 | Serviços | `services/` | Código TypeScript só quando o n8n não resolver bem (D011). Nenhum previsto por enquanto. |
 | Ferramentas | `scripts/` e `tests/` | Verificações com Vitest (workflows exportados, configs). Rodam no computador, não em produção. |
 
@@ -104,7 +104,7 @@ Arquivos e passo a passo do ambiente local (T012): [infra/n8n/README.md](../../i
 
 | Tarefa | Assunto |
 |--------|---------|
-| T017 | WhatsApp: entrada de clientes reais (Tech Provider, cadastro incorporado, coexistência) |
+| T032 | Produção: servidor, domínio com HTTPS, backup e atualização |
 
 O que já está definido e falta construir (ambiente local, verificações, conectores e fluxos) está
 no [TASKS.md](../../TASKS.md).
