@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "000000000019100",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "550000000019",
+              "phone_number_id": "000000000019001"
+            },
+            "statuses": [
+              {
+                "id": "wamid.T019.enviada.0001",
+                "status": "failed",
+                "timestamp": "1790000120",
+                "recipient_id": "5500000000019",
+                "recipient_user_id": "BR.0000000000000000019",
+                "errors": [
+                  {
+                    "code": 131026,
+                    "title": "Message undeliverable",
+                    "message": "Message undeliverable",
+                    "error_data": {
+                      "details": "Mensagem fictícia não entregue."
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

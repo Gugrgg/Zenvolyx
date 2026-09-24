@@ -1,0 +1,41 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "000000000019100",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "550000000019",
+              "phone_number_id": "000000000019001"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Paciente Fictícia"
+                },
+                "wa_id": "5500000000019",
+                "user_id": "BR.0000000000000000019"
+              }
+            ],
+            "messages": [
+              {
+                "from": "5500000000019",
+                "from_user_id": "BR.0000000000000000019",
+                "timestamp": "1790000000",
+                "id": "wamid.T019.texto.0001",
+                "type": "text",
+                "text": {
+                  "body": "Olá! Queria saber sobre implante dentário"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -27,6 +27,7 @@ services:
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "168"
       EXECUTIONS_DATA_PRUNE_MAX_COUNT: "1000"
+      CODE_ENABLE_STDOUT: "true"
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
     volumes:

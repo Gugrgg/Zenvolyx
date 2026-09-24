@@ -1,0 +1,45 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "000000000019100",
+      "changes": [
+        {
+          "field": "history",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "550000000019",
+              "phone_number_id": "000000000019001"
+            },
+            "history": [
+              {
+                "metadata": {
+                  "phase": 0,
+                  "chunk_order": 1,
+                  "progress": 100
+                },
+                "threads": [
+                  {
+                    "id": "5500000000019",
+                    "messages": [
+                      {
+                        "from": "5500000000019",
+                        "id": "wamid.T019.historico.0001",
+                        "timestamp": "1780000000",
+                        "type": "text",
+                        "text": {
+                          "body": "Mensagem antiga fictícia"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
