@@ -1,0 +1,264 @@
+{
+  "id": "whatsappCloudApi",
+  "name": "WhatsApp Cloud API connector",
+  "nodes": [
+    {
+      "id": "d4e5f6a7-0001-4b1c-9d20-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "d4e5f6a7-0002-4b1c-9d20-000000000002",
+      "name": "Build request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const ACTIONS = ['sendText', 'sendButtons', 'sendList', 'sendTemplate', 'markRead'];\nconst GATEWAY_ID = /^[A-Za-z0-9]{16}$/;\nconst PHONE_NUMBER_ID = /^[0-9]+$/;\n\nfunction isText(value, max) {\n  return typeof value === 'string' && value.trim() !== '' && value.length <= max;\n}\n\nfunction validOptions(options, maxCount, maxLabel) {\n  if (!Array.isArray(options) || options.length < 1 || options.length > maxCount) {\n    return false;\n  }\n  const ids = new Set();\n  for (const option of options) {\n    if (!option || !isText(option.id, 200) || !isText(option.label, maxLabel) || ids.has(option.id)) {\n      return false;\n    }\n    ids.add(option.id);\n  }\n  return true;\n}\n\nfunction validTemplate(template) {\n  if (!template || !isText(template.name, 512) || !isText(template.language, 20)) {\n    return false;\n  }\n  const parameters = template.parameters ?? [];\n  return Array.isArray(parameters) && parameters.every((value) => typeof value === 'string' || typeof value === 'number');\n}\n\nfunction invalidField(input) {\n  if (!ACTIONS.includes(input.action)) return 'action';\n  if (!isText(input.clientId, 100)) return 'clientId';\n  if (typeof input.gatewayWorkflowId !== 'string' || !GATEWAY_ID.test(input.gatewayWorkflowId)) return 'gatewayWorkflowId';\n  if (typeof input.phoneNumberId !== 'string' || !PHONE_NUMBER_ID.test(input.phoneNumberId)) return 'phoneNumberId';\n  if (input.action === 'markRead') return isText(input.messageId, 200) ? null : 'messageId';\n  if (!isText(input.leadId, 128)) return 'leadId';\n  if (input.action === 'sendTemplate') return validTemplate(input.template) ? null : 'template';\n  if (!isText(input.text, input.action === 'sendText' ? 4096 : 1024)) return 'text';\n  if (input.action === 'sendButtons') return validOptions(input.options, 3, 20) ? null : 'options';\n  if (input.action === 'sendList') {\n    if (!isText(input.listButton, 20)) return 'listButton';\n    return validOptions(input.options, 10, 24) ? null : 'options';\n  }\n  return null;\n}\n\nfunction messageBody(input) {\n  if (input.action === 'markRead') {\n    return { messaging_product: 'whatsapp', status: 'read', message_id: input.messageId, typing_indicator: { type: 'text' } };\n  }\n  const base = { messaging_product: 'whatsapp', recipient_type: 'individual', recipient: input.leadId };\n  if (input.action === 'sendText') {\n    return { ...base, type: 'text', text: { body: input.text, preview_url: false } };\n  }\n  if (input.action === 'sendButtons') {\n    const buttons = input.options.map((option) => ({ type: 'reply', reply: { id: option.id, title: option.label } }));\n    return { ...base, type: 'interactive', interactive: { type: 'button', body: { text: input.text }, action: { buttons } } };\n  }\n  if (input.action === 'sendList') {\n    const rows = input.options.map((option) => ({ id: option.id, title: option.label }));\n    return { ...base, type: 'interactive', interactive: { type: 'list', body: { text: input.text }, action: { button: input.listButton, sections: [{ rows }] } } };\n  }\n  const template = { name: input.template.name, language: { code: input.template.language } };\n  const parameters = (input.template.parameters ?? []).map((value) => ({ type: 'text', text: String(value) }));\n  if (parameters.length > 0) {\n    template.components = [{ type: 'body', parameters }];\n  }\n  return { ...base, type: 'template', template };\n}\n\nfunction buildRequest(input) {\n  const field = invalidField(input);\n  if (field !== null) {\n    return { valid: false, result: { ok: false, error: { code: 'invalid_input', retryable: false, field } } };\n  }\n  return {\n    valid: true,\n    clientId: input.clientId,\n    gatewayWorkflowId: input.gatewayWorkflowId,\n    method: 'POST',\n    path: `/${input.phoneNumberId}/messages`,\n    body: messageBody(input),\n  };\n}\n\nreturn $input.all().map((item) => ({ json: buildRequest(item.json) }));"
+      }
+    },
+    {
+      "id": "d4e5f6a7-0003-4b1c-9d20-000000000003",
+      "name": "Is valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4e5f6a7-0103-4b1c-9d20-000000000103",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d4e5f6a7-0004-4b1c-9d20-000000000004",
+      "name": "Call gateway",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [660, -100],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $json.gatewayWorkflowId }}",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      }
+    },
+    {
+      "id": "d4e5f6a7-0005-4b1c-9d20-000000000005",
+      "name": "Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -100],
+      "parameters": {
+        "jsCode": "const RATE_LIMIT_CODES = [4, 80007, 130429, 131056];\nconst TRANSIENT_CODES = [1, 2, 131000];\n\nfunction failure(code, retryable, metaCode = null) {\n  return { ok: false, error: { code, retryable, metaCode } };\n}\n\nfunction outcome(response) {\n  if (response.error !== undefined) {\n    const message = typeof response.error === 'string' ? response.error : String(response.error?.message ?? '');\n    return /not active|does not exist|not found|could not find/i.test(message) ? failure('no_gateway', false) : failure('unavailable', true);\n  }\n  if (response.status === 0) return failure('invalid_request', false);\n  if (response.status >= 200 && response.status < 300) {\n    const messageId = response.body?.messages?.[0]?.id;\n    return messageId ? { ok: true, messageId } : { ok: true };\n  }\n  const metaCode = response.body?.error?.code ?? null;\n  if (response.status === 401 || metaCode === 190) return failure('auth', false, metaCode);\n  if (response.status === 429 || RATE_LIMIT_CODES.includes(metaCode)) return failure('rate_limited', true, metaCode);\n  if (response.status >= 500 || TRANSIENT_CODES.includes(metaCode)) return failure('unavailable', true, metaCode);\n  if (metaCode === 131047) return failure('outside_window', false, metaCode);\n  if (metaCode === 131026) return failure('undeliverable', false, metaCode);\n  return failure('meta_error', false, metaCode);\n}\n\nconst firstAttempt = $prevNode.name === 'Call gateway';\nreturn $input.all().map((item, index) => {\n  const result = outcome(item.json);\n  if (firstAttempt && result.error?.retryable) {\n    return { json: { ...$('Build request').itemMatching(index).json, retry: true } };\n  }\n  return { json: { retry: false, result } };\n});"
+      }
+    },
+    {
+      "id": "d4e5f6a7-0006-4b1c-9d20-000000000006",
+      "name": "Needs retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, -100],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4e5f6a7-0106-4b1c-9d20-000000000106",
+              "leftValue": "={{ $json.retry }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d4e5f6a7-0007-4b1c-9d20-000000000007",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1320, -200],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "d4e5f6a7-0008-4b1c-9d20-000000000008",
+      "name": "Call gateway (retry)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1540, -200],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $json.gatewayWorkflowId }}",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      }
+    },
+    {
+      "id": "d4e5f6a7-0009-4b1c-9d20-000000000009",
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 100],
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({ json: item.json.result }));"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build request": {
+      "main": [
+        [
+          {
+            "node": "Is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is valid": {
+      "main": [
+        [
+          {
+            "node": "Call gateway",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call gateway": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify": {
+      "main": [
+        [
+          {
+            "node": "Needs retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs retry": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Call gateway (retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call gateway (retry)": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

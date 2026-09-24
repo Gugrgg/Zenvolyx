@@ -1,0 +1,8 @@
+{
+  "action": "sendText",
+  "clientId": "clinica-exemplo",
+  "gatewayWorkflowId": "waGatewayFicti01",
+  "phoneNumberId": "000000000018001",
+  "leadId": "BR.0000000000000000001",
+  "text": "Olá! Você falou com a Clínica Exemplo."
+}
