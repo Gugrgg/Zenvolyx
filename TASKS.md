@@ -12,8 +12,6 @@ Formato (linhas de baixo são opcionais):
 
 ## Backlog
 
-- [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h
-  Depende: T007 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Contas e acesso), DECISIONS.md (D015)
 - [ ] T018 Criar o conector `integrations/whatsapp/cloud-api/` conforme o contrato (texto, botões, lista, template e marcar como lida, com envio pelo BSUID)
   Depende: T007, T012 | Sugerido: CODEX | Ref: integrations/whatsapp/README.md
 - [ ] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
@@ -45,7 +43,8 @@ Formato (linhas de baixo são opcionais):
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T017 Especificar a entrada de clientes reais no WhatsApp: verificação da empresa, app com acesso avançado (Tech Provider), página de cadastro incorporado v4 com coexistência e sincronização em 24 h [CLAUDE]
+  Depende: T007 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Contas e acesso), DECISIONS.md (D015)
 
 ## Concluído
 
