@@ -119,12 +119,15 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T019 [CLAUDE] Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
-  Depende: T007, T012, T016 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Entrada), DECISIONS.md (D016)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
+  Ref: automations/whatsapp-inbound/README.md, DECISIONS.md (D027)
+  Validação: no n8n 2.40.5 local, com credencial e cliente fictícios temporários, 20 casos simulando a Meta deram o resultado esperado: desafio aceito (200 com o `hub.challenge`) e recusado (403) com token errado ou ausente; texto com acentos escapados e sem escapar; duplicata descartada; assinatura errada e ausente recusadas; botão, lista, usuário sem telefone e áudio (`unsupported`); status `failed`, histórico, número desconhecido e corpo que não é da Meta só no log; lote com duas mensagens; gatilho manual com o verify token certo; Data table criada na primeira mensagem e limpeza por data. Logs sem telefone, BSUID, nome nem texto. `npm test` (209 testes, 31 novos), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram. Ligação com o app real da Meta pendente: o dono cria o app e cola o App Secret (README).
 
 - [x] T036 Repriorizar o projeto para a demo odontológica e o primeiro cliente pagante: objetivo, caminho da demo, fase comercial, dependências, regras de saúde e cenários
   Ref: TASKS.md (Objetivo atual), DECISIONS.md (D025, D026), docs/arquitetura/demo.md, docs/arquitetura/demo-cenarios.md, docs/arquitetura/ia.md (Regras de saúde)
@@ -228,23 +231,25 @@ Observações:
 - ...
 -->
 
-### Handoff T016
+### Handoff T019
 Concluído:
-- sub-workflow `loadClientConfig` em automations/load-client-config/, importado e publicado no n8n local; D022
-- tests/load-client-config.test.ts roda o código do nó com clientes fictícios
+- entrada `waInboundWebhook` em automations/whatsapp-inbound/, publicada no n8n local com a credencial `WhatsApp App Secret` (valor `PREENCHER` até o dono colar o App Secret); D027
+- tests/whatsapp-inbound.test.ts e fixtures `inbound-*.json` em tests/fixtures/whatsapp/
 Arquivos principais:
-- automations/load-client-config/workflow.json
-- automations/load-client-config/README.md
-Próxima tarefa: T019
+- automations/whatsapp-inbound/workflow.json
+- automations/whatsapp-inbound/README.md
+Próxima tarefa: T020
 Observações:
-- T019: chamar pelo nó Execute Workflow (fonte "Database", ID `loadClientConfig`, "Run once for each item") com `{ "phoneNumberId": <metadata.phone_number_id> }`. Com `found: false`, parar o fluxo; `found: false` ou `invalidConfigs` com itens geram aviso sem dados pessoais (T027, depois da demo; até lá, só log sem dados pessoais).
-- T019: App Secret e verify token ficam no n8n ou no `.env` (nomes no `.env.example`), nunca no JSON exportado. A assinatura é calculada sobre o corpo bruto da requisição. O lead é identificado pelo BSUID (`from_user_id` / `user_id`); o telefone pode não vir.
-- T019 e T020: fixtures fictícias em `tests/fixtures/whatsapp/` (texto, resposta de botão, rajada, eco da equipe, status `failed`, assinatura inválida); estado e deduplicação nas tabelas internas do n8n (D013). O número de teste da Meta não usa o app, então não gera `smb_message_echoes`: a pausa por eco da equipe só é testada com fixture.
+- T020 continua do nó **Build event**, que devolve `{ event, config }` por mensagem: agrupar as rajadas e pausar antes de chamar a conversa (T028).
+- T020: o eco da equipe (`smb_message_echoes`) hoje é descartado em **Parse events**, que só lê o campo `messages`; ler o eco ali para pausar o lead. Ainda não há fixtures de rajada nem de eco. O número de teste da Meta não usa o app, então não gera eco: a pausa por eco só é testada com fixture.
+- Tabelas novas (rajadas na T020, estado na T028) seguem a D027: referência pelo nome e nó "criar se não existir" num ramo acima, porque a ordem "v1" roda o ramo de cima antes.
+- Simular a Meta no n8n local: criar uma credencial Crypto de teste com segredo fictício, importar uma variante com ela nos dois nós Crypto e `responseMode` `lastNode` no POST (a saída volta na resposta) e assinar o corpo com esse segredo. No fim, reimportar o JSON do repositório com `WhatsApp App Secret` (ID `waAppSecretCred1`) selecionada, publicar e reiniciar. Cliente fictício temporário em `clients/` é apagado depois.
+- No Git Bash, `docker compose exec` com caminho `/tmp/...` precisa de `MSYS_NO_PATHCONV=1`; arquivo copiado com `docker compose cp` é do root e sai com `exec -u root`.
 - Até a T031 (depois da demo), limpar cada export à mão (D022): o JSON fica só com `id`, `name`, `nodes`, `connections`, `settings` e `active`. Conferir que `shared` (dono e projeto do n8n) não entrou.
 - CLI do n8n dentro do container sempre com `-e N8N_RUNNERS_BROKER_PORT=5690`; importar despublica, então publicar e reiniciar o n8n depois (infra/n8n/README.md, seção 7). `n8n execute` não inicializa Data tables: testar fluxos com tabela pelo webhook.
 - Docker Desktop fica em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer, usar `resources/bin/docker.exe` dessa pasta.
-- O workflow de teste arquivado `t016TempHarness0` ("T016 teste temporario (pode apagar)") pode ser apagado pelo editor; a CLI não apaga.
 - Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a clínica da demo (`clients/odontologia-demo/`, T030); `npm run check:clients` valida antes de publicar.
+- O dono liga o app de teste da Meta pelo README da entrada ("Ligar o app de teste da Meta"). Até a T030, o esperado no log é `whatsapp_unknown_client`.
 
 ### Handoff T018
 Concluído:
@@ -257,9 +262,8 @@ Próxima tarefa: T028
 Observações:
 - T028 e T029: chamar pelo nó Execute Workflow (ID `whatsappCloudApi`, "Run once for each item"), com `clientId`, `gatewayWorkflowId` e `phoneNumberId` da config, mais os campos da ação. `auth` e `no_gateway` geram aviso à agência (T027, depois da demo; até lá, log sem dados pessoais); `outside_window` exige template.
 - Envio de verdade ainda não foi testado: falta token válido e número de teste da Meta (T030). A porta da clínica da demo é criada à mão, com o token da Zenvolyx (integrations/whatsapp/client-gateway/README.md).
-- T019: `history`, `smb_app_state_sync` e `account_update` chegam no mesmo webhook; confirmar e descartar (D013).
 - T035 e T034: workflows que manipulam token não salvam dados de execução, nem em erro. A T034 depende da produção (T032) e das aprovações da Meta (docs/arquitetura/whatsapp-cadastro.md, Pré-requisitos).
-- No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além da credencial fictícia "T033 teste (pode apagar)"; podem ser apagados pelo editor.
+- No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além das credenciais fictícias "T033 teste (pode apagar)" e "T019 teste (pode apagar)"; podem ser apagados pelo editor.
 
 ### Handoff T008
 Concluído:
