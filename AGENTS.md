@@ -14,6 +14,7 @@ Automatiza captação, qualificação, agendamento e encaminhamento de leads com
 e CRM, com uma estrutura reutilizável entre clientes.
 
 - Premissas: n8n self-hosted (D006), WhatsApp pela API oficial da Meta (D007), CRM definido por cliente (D008).
+- Objetivo atual: o primeiro cliente odontológico pagante (D025). Demo principal: clínica fictícia em `clients/odontologia-demo/`. Até a demo ficar pronta, só se trabalha no caminho da demo do `TASKS.md`.
 - Stack: Node.js 24 LTS + TypeScript, npm, Vitest e Biome (D009 aceita); Zod instalado na T015 para validar as configs de clientes e reutilizar nas entradas externas.
 - Testes: `npm test` (Vitest).
 - Lint/format: `npm run lint` (Biome, sem alterar arquivos).
@@ -64,7 +65,8 @@ Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 ## 4. Regras de desenvolvimento
 
 - Uma tarefa = um agente. Não usar os dois agentes na mesma tarefa.
-- Fazer só o que a tarefa pede. Melhoria fora do escopo vira tarefa nova no Backlog, não código.
+- Fazer só o que a tarefa pede. Melhoria fora do escopo vira tarefa nova em "Backlog: depois da
+  demo", não código; só entra no caminho da demo se a demo não funcionar sem ela (D025).
 - Reutilizar o que existe antes de criar abstração nova.
 - Nada específico de cliente em `integrations/` ou `services/`: diferenças ficam em `clients/<cliente>/`.
 - Não adicionar dependência sem necessidade; justificar no commit (e em `DECISIONS.md` se for estrutural).
@@ -91,6 +93,8 @@ Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 - Não logar payload completo com telefone, e-mail, CPF etc.
 - Clientes da área de saúde: dado de saúde é sensível (LGPD). Automações coletam só o necessário
   para qualificar e agendar (ex.: tratamento de interesse, horário), nunca histórico clínico.
+- IA com pacientes: nunca diagnostica, interpreta sintomas, indica tratamento ou remédio, nem faz
+  propaganda; urgência vai para a equipe com texto fixo (D026, `docs/arquitetura/ia.md`).
 - Secret encontrado no histórico do Git: parar e avisar o usuário. Não reescrever histórico por conta própria.
 
 **Testes**
@@ -103,10 +107,12 @@ Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 ## 6. Escolher uma tarefa
 
 1. Se há tarefa sua em "Em andamento" (sessão anterior interrompida), continue nela.
-2. Senão, pegar no Backlog, de cima para baixo, a primeira que:
+2. Senão, pegar em "Backlog: caminho da demo", de cima para baixo, a primeira que:
    - tenha `Sugerido:` igual a você, ou nenhuma sugestão;
    - tenha todas as dependências em "Concluído".
    `Sugerido:` é preferência: o agente mais adequado pode assumir se o outro não estiver nela.
+   "Backlog: depois da demo" só com pedido do dono (D025). Tarefas `B` (fase comercial) são do
+   dono: agentes só ajudam quando ele pede.
 3. Nunca pegar tarefa em andamento marcada para o outro agente.
 4. Antes de escrever código: mover para "Em andamento" com `[CLAUDE]` ou `[CODEX]`.
    Se os agentes trabalham em cópias diferentes do repo (ex.: Codex na nuvem), commitar e dar push dessa mudança em `dev` antes de começar.
