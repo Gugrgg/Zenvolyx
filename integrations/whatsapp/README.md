@@ -11,6 +11,7 @@ Um item JSON por chamada ao sub-workflow:
 | Campo | Ações | Conteúdo |
 |-------|-------|----------|
 | `action` | todas | `sendText`, `sendButtons`, `sendList`, `sendTemplate` ou `markRead`. |
+| `clientId` | todas | Cliente que envia; o conector acha a porta dele (D023). |
 | `phoneNumberId` | todas | Número do cliente que envia (`whatsapp.phoneNumberId` da config). |
 | `leadId` | envios | BSUID do lead; o conector envia pelo campo `recipient`. |
 | `text` | `sendText`, `sendButtons`, `sendList` | Texto da mensagem. |
@@ -28,9 +29,12 @@ Um item JSON por chamada ao sub-workflow:
 ## Regras
 
 - Tenta de novo sozinho em erro temporário (limite de taxa, erro 5xx) antes de devolver falha.
-- Usa a credencial única da agência (D014, D015). Se o nó nativo do n8n não aceitar `recipient`,
-  usa o nó HTTP Request com essa credencial.
-- Versão da Graph API fixa na implementação, atualizada de propósito.
+- Chama a Graph API pela porta do cliente (D023): o conector monta método, caminho e corpo, e a
+  porta, que tem a credencial do cliente, faz a chamada
+  ([porta do cliente](../../docs/arquitetura/whatsapp-cadastro.md#token-e-porta-do-cliente-d023)).
+  Sem porta para o `clientId`, devolve `code` `no_gateway`; token recusado pela Meta, `auth`. Os
+  dois vêm com `retryable` `false`.
+- Versão da Graph API fixa (v25.0 em 2026-09), atualizada de propósito.
 - Não registra texto de mensagem, BSUID nem telefone; erros levam cliente, ação e código.
 
 Como testar: payloads fictícios em `tests/fixtures/whatsapp/` e roteiro de verificação no README de

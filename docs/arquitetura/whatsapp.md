@@ -1,24 +1,24 @@
 # WhatsApp
 
-Como a Zenvolyx usa a API oficial do WhatsApp (Cloud API, D007). Decisões: D015 e D016 no
+Como a Zenvolyx usa a API oficial do WhatsApp (Cloud API, D007). Decisões: D016 e D023 no
 [DECISIONS.md](../../DECISIONS.md). Contrato do conector: [integrations/whatsapp](../../integrations/whatsapp/README.md).
 Regras da Meta conferidas em 2026-09 na documentação oficial (links no fim).
 
-## Contas e acesso (D015)
+## Contas e acesso (D023)
 
 - Cada cliente é dono do número e da conta do WhatsApp Business (WABA), no portfólio dele na
   Meta. A Meta cobra as mensagens na forma de pagamento do cliente (custo repassado, D007).
 - O cliente conecta o número pelo cadastro incorporado da Meta (Embedded Signup v4) numa página
   da Zenvolyx, com coexistência: continua usando o app WhatsApp Business no celular, no mesmo
   número, com o histórico sincronizado entre app e API.
-- A Zenvolyx atua como Tech Provider: a conta do cliente fica compartilhada com o portfólio da
-  agência, e uma credencial única (token de usuário do sistema) acessa todas elas (D014). Cada
-  envio usa o `phoneNumberId` da config do cliente.
+- A Zenvolyx atua como Tech Provider. A conta continua só do cliente, e o acesso é por um token
+  do cliente, guardado como credencial do n8n e usado só pela porta dele (D023). Cada envio usa o
+  `phoneNumberId` da config do cliente.
 - Antes do primeiro cliente real: verificação da empresa na Meta, app aprovado com acesso
-  avançado a `whatsapp_business_messaging` e `whatsapp_business_management`, e a página de
-  cadastro (T017).
-- Até lá, desenvolvimento e demo usam o app da Zenvolyx em modo de desenvolvimento com o número
-  de teste da Meta. Conta da própria agência não precisa de acesso avançado.
+  avançado a `whatsapp_business_messaging` e `whatsapp_business_management`, produção com HTTPS e
+  o fluxo de cadastro ([whatsapp-cadastro.md](whatsapp-cadastro.md)).
+- Até lá, desenvolvimento e demo usam o app da Zenvolyx com o número de teste da Meta; a porta da
+  Zenvolyx usa o token da própria agência. Conta da própria agência não precisa de acesso avançado.
 
 ## Entrada (D016)
 
@@ -27,7 +27,9 @@ Regras da Meta conferidas em 2026-09 na documentação oficial (links no fim).
 - POST: responde 200 na hora e depois confere a assinatura `X-Hub-Signature-256` (HMAC SHA-256 do
   corpo com o App Secret). Assinatura inválida: descarta e alerta.
 - Campos assinados no app: `messages` e, para clientes em coexistência, `smb_message_echoes`
-  (mensagens que a equipe envia pelo app). O histórico sincronizado no cadastro não é guardado (D013).
+  (mensagens que a equipe envia pelo app). `history`, `smb_app_state_sync` e `account_update`
+  também chegam, por causa do cadastro ([whatsapp-cadastro.md](whatsapp-cadastro.md)): a entrada
+  confirma e descarta. O histórico sincronizado no cadastro não é guardado (D013).
 - Descarta eventos repetidos pelo ID da mensagem (`wamid`); a Meta reenvia o que não confirmou.
 - Identifica o cliente pelo `metadata.phone_number_id` (D014) e o lead pelo BSUID
   (`from_user_id` / `user_id`). O telefone (`from` / `wa_id`) pode não vir, porque o usuário pode

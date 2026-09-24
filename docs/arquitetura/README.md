@@ -6,6 +6,8 @@ Desenho técnico das automações, serviços e integrações.
   ambientes e o que está em aberto (T005).
 - [WhatsApp](whatsapp.md): contas e acesso, entrada, rajadas, atendimento humano,
   templates, custos e limites da coexistência (T007).
+- [Cadastro de clientes no WhatsApp](whatsapp-cadastro.md): pré-requisitos da Meta,
+  convite, página, fluxo de cadastro, token e porta do cliente (T017).
 - [IA](ia.md): o que a IA faz e não faz, provedor, modelo, custo, dados, áudio e
   avaliação (T011).
 - [Demo](demo.md): o que a demo mostra, roteiro da conversa, estado, preparação e
