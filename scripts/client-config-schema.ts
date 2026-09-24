@@ -6,6 +6,7 @@ const nonBlank = z.string().refine((value) => value.trim().length > 0, {
 const identifier = nonBlank.refine((value) => value === value.trim(), {
   message: "ID não pode começar ou terminar com espaços.",
 });
+const N8N_WORKFLOW_ID = /^[A-Za-z0-9]{16}$/;
 const questionFields = { id: identifier, text: nonBlank };
 const questionSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...questionFields, type: z.literal("text") }),
@@ -79,7 +80,10 @@ export const clientConfigSchema = z
     name: nonBlank,
     active: z.boolean(),
     timezone: nonBlank.refine(isTimeZone, { message: "Fuso IANA inválido." }),
-    whatsapp: z.strictObject({ phoneNumberId: identifier }),
+    whatsapp: z.strictObject({
+      phoneNumberId: identifier,
+      gatewayWorkflowId: identifier,
+    }),
     crm: z.strictObject({
       provider: z.literal("google-sheets"),
       settings: z.strictObject({ spreadsheetId: identifier }),
@@ -138,6 +142,10 @@ export const clientConfigSchema = z
           value: config.whatsapp.phoneNumberId,
         },
         {
+          path: ["whatsapp", "gatewayWorkflowId"],
+          value: config.whatsapp.gatewayWorkflowId,
+        },
+        {
           path: ["crm", "settings", "spreadsheetId"],
           value: config.crm.settings.spreadsheetId,
         },
@@ -150,6 +158,12 @@ export const clientConfigSchema = z
         if (value?.toUpperCase().includes("PREENCHER")) {
           report(path, "Substitua PREENCHER antes de ativar o cliente.");
         }
+      }
+      if (!N8N_WORKFLOW_ID.test(config.whatsapp.gatewayWorkflowId)) {
+        report(
+          ["whatsapp", "gatewayWorkflowId"],
+          "ID da porta deve ter 16 letras e números, o formato que o n8n consegue chamar.",
+        );
       }
     }
     const questions = config.qualification.questions;

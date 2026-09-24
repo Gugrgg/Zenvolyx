@@ -5,7 +5,8 @@
   "active": false,
   "timezone": "America/Sao_Paulo",
   "whatsapp": {
-    "phoneNumberId": "PREENCHER"
+    "phoneNumberId": "PREENCHER",
+    "gatewayWorkflowId": "PREENCHER"
   },
   "crm": {
     "provider": "google-sheets",

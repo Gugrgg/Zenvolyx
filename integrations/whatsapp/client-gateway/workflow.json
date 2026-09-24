@@ -1,0 +1,162 @@
+{
+  "id": "waClientGateway0",
+  "name": "WhatsApp client gateway (template)",
+  "nodes": [
+    {
+      "id": "c9f1a2b3-0001-4d2e-8f10-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "c9f1a2b3-0002-4d2e-8f10-000000000002",
+      "name": "Validate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const METHODS = ['GET', 'POST', 'DELETE'];\nconst PATH_PATTERN = /^(\\/[A-Za-z0-9_-]+)+$/;\nconst MAX_PATH_LENGTH = 200;\n\nfunction isPlainObject(value) {\n  return value !== null && typeof value === 'object' && !Array.isArray(value);\n}\n\nfunction validateRequest(input) {\n  const method = typeof input.method === 'string' ? input.method.toUpperCase() : '';\n  if (!METHODS.includes(method)) {\n    return { valid: false, rejected: 'invalid_method' };\n  }\n  const path = input.path;\n  if (typeof path !== 'string' || path.length > MAX_PATH_LENGTH || !PATH_PATTERN.test(path)) {\n    return { valid: false, rejected: 'invalid_path' };\n  }\n  const query = input.query ?? {};\n  if (!isPlainObject(query) || !Object.values(query).every((value) => typeof value === 'string')) {\n    return { valid: false, rejected: 'invalid_query' };\n  }\n  const body = input.body ?? null;\n  if (body !== null && !isPlainObject(body)) {\n    return { valid: false, rejected: 'invalid_body' };\n  }\n  return { valid: true, method, path, query, body };\n}\n\nreturn $input.all().map((item) => ({ json: validateRequest(item.json) }));"
+      }
+    },
+    {
+      "id": "c9f1a2b3-0003-4d2e-8f10-000000000003",
+      "name": "Is valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c9f1a2b3-1001-4d2e-8f10-000000000001",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c9f1a2b3-0004-4d2e-8f10-000000000004",
+      "name": "Call Graph API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -100],
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "=https://graph.facebook.com/v25.0{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.query) }}",
+        "sendBody": "={{ $json.body !== null }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "c9f1a2b3-0005-4d2e-8f10-000000000005",
+      "name": "Shape response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -100],
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({ json: { status: item.json.statusCode, body: item.json.body ?? null } }));"
+      }
+    },
+    {
+      "id": "c9f1a2b3-0006-4d2e-8f10-000000000006",
+      "name": "Rejected",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 100],
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({ json: { status: 0, body: null, rejected: item.json.rejected } }));"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate request": {
+      "main": [
+        [
+          {
+            "node": "Is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is valid": {
+      "main": [
+        [
+          {
+            "node": "Call Graph API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Graph API": {
+      "main": [
+        [
+          {
+            "node": "Shape response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

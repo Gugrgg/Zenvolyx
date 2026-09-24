@@ -65,6 +65,8 @@ const invalidFields: { path: (string | number)[]; value: unknown }[] = [
   { path: ["timezone"], value: "+03:00" },
   { path: ["whatsapp", "phoneNumberId"], value: 123 },
   { path: ["whatsapp", "phoneNumberId"], value: " id-com-espacos " },
+  { path: ["whatsapp", "gatewayWorkflowId"], value: undefined },
+  { path: ["whatsapp", "gatewayWorkflowId"], value: " waGatewayFicti01 " },
   { path: ["crm"], value: undefined },
   { path: ["crm", "provider"], value: "desconhecido" },
   { path: ["crm", "settings", "spreadsheetId"], value: "" },
@@ -204,6 +206,7 @@ test("counts topics and texts across the whole AI knowledge base", () => {
 
 test.each([
   ["whatsapp", "phoneNumberId"],
+  ["whatsapp", "gatewayWorkflowId"],
   ["crm", "settings", "spreadsheetId"],
   ["calendar", "settings", "calendarId"],
 ])("allows PREENCHER only while inactive (%j)", (...path) => {
@@ -212,6 +215,16 @@ test.each([
   config.active = false;
   expect(clientConfigSchema.safeParse(config).success).toBe(true);
 });
+
+test.each(["porta-com-hifen", "curtoDemais", "waGatewayFicti01x"])(
+  "requires a 16-character n8n workflow ID for active clients (%s)",
+  (gatewayWorkflowId) => {
+    const config = change(["whatsapp", "gatewayWorkflowId"], gatewayWorkflowId);
+    expect(clientConfigSchema.safeParse(config).success).toBe(false);
+    config.active = false;
+    expect(clientConfigSchema.safeParse(config).success).toBe(true);
+  },
+);
 
 test("requires template configs to be inactive and IDs to match directories", () => {
   const config = validConfig();
