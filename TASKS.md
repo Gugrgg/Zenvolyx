@@ -42,7 +42,7 @@ Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 - [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
   Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
 - [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe, urgência e pedido para parar, com o estado em tabela (D020); erros e chamadas da equipe em log sem dados pessoais até a T027
-  Depende: T016, T018, T019, T021, T024, T039 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), DECISIONS.md (D020, D026)
+  Depende: T016, T018, T019, T021, T024, T039 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), automations/whatsapp-inbound/README.md (Saída, Pausa), DECISIONS.md (D020, D026, D028)
 - [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
   Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
 - [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
@@ -107,7 +107,7 @@ podem começar antes de a demo ficar pronta.
 - [ ] B011 Fechar o primeiro cliente: contrato assinado e primeiro pagamento
   Depende: B010
 - [ ] B012 Implantar o primeiro cliente real: config, número, produção e o que mais o "Backlog: depois da demo" exigir
-  Depende: B011, B015 | Apoio: CLAUDE e CODEX
+  Depende: B011, B015 | Apoio: CLAUDE e CODEX | Ref: automations/whatsapp-inbound/README.md (Limites conhecidos: eco da coexistência)
 - [ ] B013 Medir os resultados do primeiro mês: contatos, avaliações agendadas, tempo de resposta e comparecimento
   Depende: B012
 - [ ] B014 Criar o primeiro case, com autorização da clínica
@@ -117,12 +117,15 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T020 [CLAUDE] No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, urgência e pedido para parar)
-  Depende: T019 | Sugerido: CLAUDE | Ref: docs/arquitetura/whatsapp.md (Rajadas, Atendimento humano)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, urgência e pedido para parar)
+  Ref: automations/whatsapp-inbound/README.md, DECISIONS.md (D028)
+  Validação: no n8n 2.40.5 local, com credencial e cliente fictícios temporários, requisições assinadas simularam a Meta: mensagem única respondida depois de 8 s; rajada de duas mensagens com 1,5 s de intervalo virou um evento só ("Oi" e "Queria marcar uma avaliação", um por linha) e a execução mais antiga parou; rajada com botão (`reply`, com o último `replyId`) e com áudio (`unsupported`); lote do mesmo lead num evento; eco com BSUID e eco só com telefone pausaram o lead (sem resposta, log `whatsapp_paused_lead`) sem afetar outro lead; eco durante a espera cancelou a rajada; segundo eco atualizou a mesma linha; pausa vencida não bloqueou e saiu na limpeza diária; tabela de rajadas vazia depois de cada caso. `npm test` (228 testes, 19 novos), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram. A pausa por eco real depende de cliente em coexistência (B012).
 
 - [x] T019 Criar o fluxo `automations/whatsapp-inbound/`: verificação do webhook, 200 imediato, assinatura, deduplicação, status `failed`, cliente e lead identificados; README com o passo a passo para ligar o app de teste da Meta ao túnel
   Ref: automations/whatsapp-inbound/README.md, DECISIONS.md (D027)
@@ -230,23 +233,23 @@ Observações:
 - ...
 -->
 
-### Handoff T019
+### Handoff T020
 Concluído:
-- entrada `waInboundWebhook` em automations/whatsapp-inbound/, publicada no n8n local com a credencial `WhatsApp App Secret` (valor `PREENCHER` até o dono colar o App Secret); D027
-- tests/whatsapp-inbound.test.ts e fixtures `inbound-*.json` em tests/fixtures/whatsapp/
+- rajadas e pausa na entrada `waInboundWebhook` (automations/whatsapp-inbound/), publicada no n8n local; D028
+- fixtures `inbound-burst.json` e `inbound-echo.json`; testes em tests/whatsapp-inbound.test.ts
 Arquivos principais:
 - automations/whatsapp-inbound/workflow.json
 - automations/whatsapp-inbound/README.md
-Próxima tarefa: T020
+Próxima tarefa: T028
 Observações:
-- T020 continua do nó **Build event**, que devolve `{ event, config }` por mensagem: agrupar as rajadas e pausar antes de chamar a conversa (T028).
-- T020: o eco da equipe (`smb_message_echoes`) hoje é descartado em **Parse events**, que só lê o campo `messages`; ler o eco ali para pausar o lead. Ainda não há fixtures de rajada nem de eco. O número de teste da Meta não usa o app, então não gera eco: a pausa por eco só é testada com fixture.
-- Tabelas novas (rajadas na T020, estado na T028) seguem a D027: referência pelo nome e nó "criar se não existir" num ramo acima, porque a ordem "v1" roda o ramo de cima antes.
-- Simular a Meta no n8n local: criar uma credencial Crypto de teste com segredo fictício, importar uma variante com ela nos dois nós Crypto e `responseMode` `lastNode` no POST (a saída volta na resposta) e assinar o corpo com esse segredo. No fim, reimportar o JSON do repositório com `WhatsApp App Secret` (ID `waAppSecretCred1`) selecionada, publicar e reiniciar. Cliente fictício temporário em `clients/` é apagado depois.
+- T028 continua da saída do nó **Burst event**, `{ event, config }` por rajada (README da entrada, "Saída"). Antes da IA, marcar como lida a última mensagem da rajada (último item de `messageIds`, ação `markRead` do conector, que mostra "digitando…"). Lead pausado não chega à conversa.
+- T028: pausar gravando em `whatsapp_lead_pauses` (upsert por `clientId` e `leadKey` = BSUID, `pausedUntil` daqui a 24 h, `reason` `handoff`, `urgent` ou `stop`), conforme o README da entrada, seção "Pausa". A pausa não entra na tabela de estado (D028).
+- Tabelas novas seguem a D027: referência pelo nome e nó "criar se não existir" num ramo acima, porque a ordem "v1" roda o ramo de cima antes.
+- Simular a Meta no n8n local: credencial Crypto de teste com segredo fictício, variante com ela nos dois nós Crypto e `responseMode` `lastNode` no POST (a saída volta na resposta, depois dos 8 s da rajada) e corpo assinado com esse segredo. No fim, reimportar o JSON do repositório com `WhatsApp App Secret` (ID `waAppSecretCred1`) selecionada, publicar, conferir a linha "Publishing workflow", reiniciar e ver os gatilhos de teste darem 404. Cliente fictício temporário em `clients/` é apagado depois.
 - No Git Bash, `docker compose exec` com caminho `/tmp/...` precisa de `MSYS_NO_PATHCONV=1`; arquivo copiado com `docker compose cp` é do root e sai com `exec -u root`.
 - Até a T031 (depois da demo), limpar cada export à mão (D022): o JSON fica só com `id`, `name`, `nodes`, `connections`, `settings` e `active`. Conferir que `shared` (dono e projeto do n8n) não entrou.
 - CLI do n8n dentro do container sempre com `-e N8N_RUNNERS_BROKER_PORT=5690`; importar despublica, então publicar e reiniciar o n8n depois (infra/n8n/README.md, seção 7). `n8n execute` não inicializa Data tables: testar fluxos com tabela pelo webhook.
-- Docker Desktop fica em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer, usar `resources/bin/docker.exe` dessa pasta.
+- Docker Desktop fica em `%LOCALAPPDATA%/Programs/DockerDesktop/`; se `docker` não aparecer, usar `resources/bin/docker.exe` dessa pasta. Se estiver fechado, abrir e esperar o n8n ficar saudável.
 - Os IDs reais da demo ainda precisam substituir `PREENCHER` antes de ativar a clínica da demo (`clients/odontologia-demo/`, T030); `npm run check:clients` valida antes de publicar.
 - O dono liga o app de teste da Meta pelo README da entrada ("Ligar o app de teste da Meta"). Até a T030, o esperado no log é `whatsapp_unknown_client`.
 
@@ -318,7 +321,7 @@ Próxima tarefa: T028
 Observações:
 - T027 (depois da demo): o sub-workflow de aviso recebe cliente, tipo (erro, equipe chamada, falha de gravação) e uma referência técnica, nunca telefone, nome ou texto; destinatário e servidor de e-mail ficam no `.env` ou em credencial do n8n (nomes no `.env.example`). O fluxo de erro global do n8n usa o mesmo sub-workflow.
 - T028: conversa como máquina de estados sobre a tabela da D020, com limpeza diária das linhas sem interação há 30 dias. Pergunta com até 3 opções vai em botões; de 4 a 10, em lista (botão "Ver opções"). Gravar no CRM no primeiro contato e a cada mudança de etapa (D017). Fixtures fictícias em `tests/fixtures/conversation/` e roteiro de verificação no README.
-- T028: `urgent` interrompe a conversa em qualquer etapa (D026): `messages.urgent` (T039), CRM `urgent` e pausa de 24 h; `stop` grava CRM `stopped`. Sem a T027, erros e chamadas da equipe vão para log sem dados pessoais, num ponto só, que a T027 depois troca pelo aviso.
+- T028: `urgent` interrompe a conversa em qualquer etapa (D026): `messages.urgent` (T039), CRM `urgent` e pausa de 24 h; `stop` grava CRM `stopped` e também pausa por 24 h. As pausas vão para a tabela da entrada (D028). Sem a T027, erros e chamadas da equipe vão para log sem dados pessoais, num ponto só, que a T027 depois troca pelo aviso.
 - T029: lista com até 9 horários mais "Nenhum desses"; o `id` de cada linha aponta para o horário guardado no estado; `slot_taken` envia `messages.slotTaken` (T039) e nova lista; `{slot}` em `messages.booked` recebe o `label` do horário.
 - A demo agora é a clínica fictícia (D025): testar T028 e T029 com `clients/odontologia-demo/` e os cenários de docs/arquitetura/demo-cenarios.md. Textos e regra são proposta: o dono revisa antes de ativar.
 
