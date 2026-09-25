@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone e as etapas `urgent` e `stopped`), com planilha modelo e passo a passo da conta de serviço do Google
-  Depende: T008, T012 | Sugerido: CLAUDE | Ref: integrations/crm/README.md, DECISIONS.md (D017)
 - [ ] T022 Criar o roteador `integrations/calendar/router/` (listSlots e book, com o cálculo de horários numa função testada) e o conector `integrations/calendar/google-calendar/` (ocupação e criação de evento pela conta de serviço)
   Depende: T010, T012 | Sugerido: CODEX | Ref: integrations/calendar/README.md, DECISIONS.md (D018)
 - [ ] T039 Guardrails odontológicos na config: mensagem fixa de urgência `messages.urgent` (D026) e `messages.slotTaken` (horário ocupado), com validador, testes, README e todas as configs
@@ -117,7 +115,8 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T021 [CLAUDE] Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone e as etapas `urgent` e `stopped`), com planilha modelo e passo a passo da conta de serviço do Google
+  Depende: T008, T012 | Sugerido: CLAUDE | Ref: integrations/crm/README.md, DECISIONS.md (D017)
 
 ## Concluído
 
