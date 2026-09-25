@@ -1,0 +1,265 @@
+{
+  "id": "crmUpsertRouter1",
+  "name": "CRM router",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c7a1e021-0001-4f21-9a21-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const PROVIDERS = {\n  'google-sheets': {\n    workflowId: 'crmGoogleSheets1',\n    invalidSetting: (settings) =>\n      typeof settings.spreadsheetId === 'string' && /^[A-Za-z0-9_-]{10,200}$/.test(settings.spreadsheetId)\n        ? null\n        : 'crm.settings.spreadsheetId',\n  },\n};\nconst STAGES = ['talking', 'qualified', 'not_qualified', 'scheduled', 'with_team', 'urgent', 'stopped'];\nconst ISO_DATE = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,3})?)?(Z|[+-]\\d{2}:\\d{2})$/;\nconst MAX_ANSWERS = 30;\n\nfunction log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction isObject(value) {\n  return value !== null && typeof value === 'object' && !Array.isArray(value);\n}\n\nfunction isText(value, maxLength) {\n  return typeof value === 'string' && value.trim().length > 0 && value.length <= maxLength;\n}\n\nfunction isOptionalText(value, maxLength) {\n  return value === null || isText(value, maxLength);\n}\n\nfunction isDate(value) {\n  return typeof value === 'string' && ISO_DATE.test(value) && !Number.isNaN(Date.parse(value));\n}\n\nfunction isTimeZone(value) {\n  if (typeof value !== 'string' || value.length === 0 || /^[+-]/.test(value)) return false;\n  try {\n    new Intl.DateTimeFormat('en', { timeZone: value });\n    return true;\n  } catch {\n    return false;\n  }\n}\n\nfunction isAnswer(item) {\n  return isObject(item) && isText(item.question, 500) && isText(item.answer, 1000);\n}\n\nfunction isAppointment(value) {\n  return (\n    value === null ||\n    (isObject(value) && isDate(value.start) && isDate(value.end) && isOptionalText(value.service ?? null, 100))\n  );\n}\n\nfunction invalidLeadField(lead) {\n  if (!isObject(lead)) return 'lead';\n  if (!isText(lead.id, 200)) return 'lead.id';\n  if (lead.phone !== null && !(typeof lead.phone === 'string' && /^[0-9]{1,30}$/.test(lead.phone))) return 'lead.phone';\n  if (!isOptionalText(lead.name, 200)) return 'lead.name';\n  if (!isText(lead.channel, 50)) return 'lead.channel';\n  if (!STAGES.includes(lead.stage)) return 'lead.stage';\n  if (!Array.isArray(lead.answers) || lead.answers.length > MAX_ANSWERS || !lead.answers.every(isAnswer)) {\n    return 'lead.answers';\n  }\n  if (!isAppointment(lead.appointment)) return 'lead.appointment';\n  if (!isDate(lead.firstContactAt)) return 'lead.firstContactAt';\n  if (!isDate(lead.lastContactAt)) return 'lead.lastContactAt';\n  return null;\n}\n\nfunction invalidField(input) {\n  if (input.action !== 'upsertLead') return 'action';\n  if (!isText(input.clientId, 100)) return 'clientId';\n  if (!isTimeZone(input.timezone)) return 'timezone';\n  if (!isObject(input.crm) || typeof input.crm.provider !== 'string' || !isObject(input.crm.settings)) return 'crm';\n  return invalidLeadField(input.lead);\n}\n\nfunction rejected(input, code, field) {\n  const clientId = isText(input.clientId, 100) ? input.clientId : null;\n  log(`crm_${code}`, field === undefined ? { clientId } : { clientId, field });\n  const error = field === undefined ? { code, retryable: false } : { code, retryable: false, field };\n  return { valid: false, result: { ok: false, error } };\n}\n\nfunction route(input) {\n  const field = invalidField(input);\n  if (field !== null) return rejected(input, 'invalid_input', field);\n  const provider = PROVIDERS[input.crm.provider];\n  if (provider === undefined) return rejected(input, 'unknown_provider');\n  const setting = provider.invalidSetting(input.crm.settings);\n  if (setting !== null) return rejected(input, 'invalid_input', setting);\n  return { ...input, valid: true, providerWorkflowId: provider.workflowId };\n}\n\nreturn $input.all().map((item) => ({ json: route(item.json) }));"
+      },
+      "id": "c7a1e021-0002-4f21-9a21-000000000002",
+      "name": "Validate lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c7a1e021-0003-4f21-9a21-000000000003",
+      "name": "Is valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $json.providerWorkflowId }}",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "c7a1e021-0004-4f21-9a21-000000000004",
+      "name": "Call provider",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [660, -100],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction failure(code, retryable) {\n  return { ok: false, error: { code, retryable } };\n}\n\nfunction outcome(response) {\n  if (response.ok === true) return { ok: true };\n  if (response.ok === false && typeof response.error?.code === 'string') {\n    return failure(response.error.code, response.error.retryable === true);\n  }\n  if (response.error !== undefined) {\n    const message = typeof response.error === 'string' ? response.error : String(response.error?.message ?? '');\n    return /not active|does not exist|not found|could not find/i.test(message)\n      ? failure('no_provider', false)\n      : failure('unavailable', true);\n  }\n  return failure('provider_error', false);\n}\n\nconst firstAttempt = $prevNode.name === 'Call provider';\nreturn $input.all().map((item, index) => {\n  const request = $('Validate lead').itemMatching(index).json;\n  const result = outcome(item.json);\n  if (firstAttempt && result.error?.retryable) return { json: { ...request, retry: true } };\n  if (!result.ok) log('crm_upsert_failed', { clientId: request.clientId, code: result.error.code });\n  return { json: { retry: false, result } };\n});"
+      },
+      "id": "c7a1e021-0005-4f21-9a21-000000000005",
+      "name": "Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0106-4f21-9a21-000000000106",
+              "leftValue": "={{ $json.retry }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c7a1e021-0006-4f21-9a21-000000000006",
+      "name": "Needs retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "c7a1e021-0007-4f21-9a21-000000000007",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1320, -200],
+      "webhookId": "7d3e2f10-5b6c-4f21-9a21-c8d9e0f1a021"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $json.providerWorkflowId }}",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "c7a1e021-0008-4f21-9a21-000000000008",
+      "name": "Call provider (retry)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1540, -200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({ json: item.json.result }));"
+      },
+      "id": "c7a1e021-0009-4f21-9a21-000000000009",
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 100]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate lead": {
+      "main": [
+        [
+          {
+            "node": "Is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is valid": {
+      "main": [
+        [
+          {
+            "node": "Call provider",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call provider": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify": {
+      "main": [
+        [
+          {
+            "node": "Needs retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs retry": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Call provider (retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call provider (retry)": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

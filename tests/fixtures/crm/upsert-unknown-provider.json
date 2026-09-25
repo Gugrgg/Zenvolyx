@@ -1,0 +1,20 @@
+{
+  "action": "upsertLead",
+  "clientId": "odontologia-demo",
+  "timezone": "America/Sao_Paulo",
+  "crm": {
+    "provider": "hubspot",
+    "settings": {}
+  },
+  "lead": {
+    "id": "BR.0000000000000000019",
+    "phone": "5500000000019",
+    "name": "Paciente Fictícia",
+    "channel": "whatsapp",
+    "stage": "talking",
+    "answers": [],
+    "appointment": null,
+    "firstContactAt": "2026-09-25T12:00:00Z",
+    "lastContactAt": "2026-09-25T12:00:00Z"
+  }
+}
