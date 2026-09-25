@@ -71,6 +71,9 @@ internas do n8n e espera alguns segundos de silêncio (8 s para começar). Se ch
 do mesmo lead, a execução anterior encerra; a última responde a tudo de uma vez. Menos respostas
 são mais claras e custam menos (ver Custos).
 
+O evento da rajada traz todas as mensagens, com os textos um por linha. Rajada com mídia vai para
+a equipe; com resposta de botão ou lista, vale a última (D028).
+
 ## Atendimento humano
 
 - A equipe responde pelo app WhatsApp Business. Cada mensagem enviada pelo app chega como
@@ -78,7 +81,10 @@ são mais claras e custam menos (ver Custos).
 - Ao enviar `handoff` ou a mensagem de urgência (D026), a automação também pausa o lead por 24 h.
 - Em pausa, a automação não responde nem marca como lida.
 - Pedido para parar (ex.: "parar", "sair") fica registrado: nenhuma mensagem iniciada pela empresa
-  vai mais para esse lead.
+  vai mais para esse lead. Ele também pausa o lead por 24 h, para a automação não responder ao
+  "ok" seguinte; se o lead voltar a escrever depois disso, é atendido.
+- A pausa fica numa tabela da entrada, pelo BSUID ou, quando o eco vem sem ele, pelo telefone
+  (D028).
 - Sem coexistência, a equipe não teria onde responder; por isso ela é o padrão para clientes.
 
 ## Mensagens e templates
