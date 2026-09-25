@@ -115,12 +115,15 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T021 [CLAUDE] Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone e as etapas `urgent` e `stopped`), com planilha modelo e passo a passo da conta de serviço do Google
-  Depende: T008, T012 | Sugerido: CLAUDE | Ref: integrations/crm/README.md, DECISIONS.md (D017)
+_(vazio)_
 
 ## Concluído
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
+
+- [x] T021 Criar o roteador `integrations/crm/router/` e o conector `integrations/crm/google-sheets/` (upsertLead pelo BSUID, com busca pelo telefone e as etapas `urgent` e `stopped`), com planilha modelo e passo a passo da conta de serviço do Google
+  Ref: integrations/crm/README.md, integrations/crm/router/README.md, integrations/crm/google-sheets/README.md, DECISIONS.md (D029)
+  Validação: no n8n 2.40.5 local, com o conector apontando para uma API do Google Sheets simulada dentro do container, um workflow temporário chamou o roteador com 14 casos, todos com o resultado esperado: cabeçalho criado em aba vazia, atualização pelo ID, lead com BSUID novo achado pelo telefone e com o ID trocado, linha acrescentada, nome começando com `=` gravado como texto (`RAW`), só a linha certa atualizada numa planilha preenchida, datas no fuso de São Paulo; `forbidden`, `not_found` (planilha e aba), `invalid_input` e `unknown_provider`; `unavailable` e `rate_limited` depois da nova tentativa, e limite resolvido na nova tentativa. Contra o Google de verdade, uma chave descartável foi recusada (`invalid_grant`) e a credencial com `PREENCHER` falhou ao assinar: as duas viraram `auth`. Logs sem dados pessoais. `npm test` (296 testes, 68 novos), `npm run lint`, `npm run typecheck`, `npm run check:workflows` e `npm run check:clients` passaram. Gravação real pendente da conta de serviço e da planilha da demo (T030).
 
 - [x] T020 No fluxo de entrada, agrupar rajadas e pausar a automação por lead (eco da equipe, `handoff`, urgência e pedido para parar)
   Ref: automations/whatsapp-inbound/README.md, DECISIONS.md (D028)
@@ -264,21 +267,23 @@ Observações:
 - T028 e T029: chamar pelo nó Execute Workflow (ID `whatsappCloudApi`, "Run once for each item"), com `clientId`, `gatewayWorkflowId` e `phoneNumberId` da config, mais os campos da ação. `auth` e `no_gateway` geram aviso à agência (T027, depois da demo; até lá, log sem dados pessoais); `outside_window` exige template.
 - Envio de verdade ainda não foi testado: falta token válido e número de teste da Meta (T030). A porta da clínica da demo é criada à mão, com o token da Zenvolyx (integrations/whatsapp/client-gateway/README.md).
 - T035 e T034: workflows que manipulam token não salvam dados de execução, nem em erro. A T034 depende da produção (T032) e das aprovações da Meta (docs/arquitetura/whatsapp-cadastro.md, Pré-requisitos).
-- No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além das credenciais fictícias "T033 teste (pode apagar)" e "T019 teste (pode apagar)"; podem ser apagados pelo editor.
+- No n8n local ficaram, arquivados, os workflows de teste das T016, T018 e T033, além das credenciais fictícias "T033 teste (pode apagar)", "T019 teste (pode apagar)" e "T021 teste (pode apagar)" e dos workflows de teste da T021; podem ser apagados pelo editor.
 
-### Handoff T008
+### Handoff T021
 Concluído:
-- contrato do CRM em integrations/crm/README.md; D017
-- `crm` obrigatório na config; modelo com exemplo `google-sheets`
+- roteador `crmUpsertRouter1` e conector `crmGoogleSheets1` em integrations/crm/, publicados no n8n local; D029
+- conector com a credencial `Google (conta de serviço)` (valor `PREENCHER` até o dono criar a conta de serviço)
 Arquivos principais:
+- integrations/crm/router/workflow.json
+- integrations/crm/google-sheets/workflow.json
 - integrations/crm/README.md
-- DECISIONS.md (D017)
-Próxima tarefa: T021
+Próxima tarefa: T028
 Observações:
-- T021: README com passo a passo simples para o dono criar a conta de serviço no Google Cloud (com a Sheets API ativada) e cadastrar a credencial no n8n; a chave JSON fica só no n8n. Cabeçalho da aba `Leads` num CSV modelo em `integrations/crm/google-sheets/`, para importar numa planilha nova.
-- T021: fixtures fictícias em `tests/fixtures/crm/`: lead novo, atualização pelo BSUID, BSUID novo com o mesmo telefone e fornecedor desconhecido.
-- T019: o evento da entrada ganhou `name` (nome do perfil do WhatsApp, opcional), que vai para o CRM (docs/arquitetura/whatsapp.md).
-- T021: etapas novas `urgent` (Urgência) e `stopped` (Pediu para parar) no contrato (T036, D026).
+- T028: chamar pelo nó Execute Workflow (fonte "Database", ID `crmUpsertRouter1`, "Run once for each item") no primeiro contato e a cada mudança de etapa, com o contrato de integrations/crm/README.md: `timezone` e `crm` da config e o `lead` com o estado completo.
+- T028: `answers` só com texto (resposta de pergunta `number` vira texto); datas em ISO 8601 com fuso (ex.: `2026-09-25T12:00:00Z`); `phone` e `name` `null` quando não vierem. Fora disso, o roteador devolve `invalid_input` com o `field`.
+- T028: falha do CRM não interrompe a conversa. O roteador já tentou de novo e registrou `crm_upsert_failed` no log; a T027 liga o aviso depois.
+- Simular o Google no n8n local: uma API do Sheets simulada roda dentro do container, em 127.0.0.1 (a proteção contra SSRF do n8n vem desligada), com o conector numa variante com a URL trocada e sem credencial. Um workflow temporário chama o roteador pelo `n8n execute`, que serve porque o CRM não usa Data table. Reiniciar o n8n encerra a API simulada.
+- No n8n local ficaram arquivados os workflows `t021Harness00001` e `t021Probe0000001` e a credencial "T021 teste (pode apagar)", com uma chave descartável sem conta. Podem ser apagados pelo editor.
 
 ### Handoff T010
 Concluído:
@@ -292,7 +297,7 @@ Observações:
 - T022: cálculo de horários numa função pura em JS, testada com Vitest (fuso, expediente com intervalo, antecedência mínima, dias à frente, ocupação); o Code node do n8n usa o mesmo código, e um teste confere que os dois são iguais.
 - T022: Calendar API pelo nó HTTP Request com a credencial de conta de serviço (escopo de Calendar): consulta de ocupação e criação de evento com `extendedProperties.private` (`leadId` e marca da Zenvolyx), sem `attendees`. README com passo a passo para o cliente compartilhar a agenda ("Fazer alterações nos eventos") e achar o `calendarId`.
 - T022: fixtures fictícias em `tests/fixtures/calendar/`: expediente com almoço, compromisso ocupando horário, antecedência mínima e horário tomado entre `listSlots` e `book`.
-- T021: o contrato do CRM agora recebe `timezone`; datas e agendamento na planilha nesse fuso.
+- T022: usar a credencial `Google (conta de serviço)` (ID `googleServiceAcc`, D029), acrescentando o escopo do Calendar ao campo Scope(s), no nó HTTP Request com autenticação predefinida `googleApi`. Credencial recusada chega como `error` com `invalid_grant`; chave vazia ou errada, com "secretOrPrivateKey must be an asymmetric key". Ver o nó **Result** do conector google-sheets.
 
 ### Handoff T011
 Concluído:
