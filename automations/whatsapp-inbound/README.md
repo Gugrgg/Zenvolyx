@@ -1,8 +1,9 @@
 # WhatsApp inbound
 
-Entrada única do WhatsApp (D016, D027). Recebe os eventos de todos os clientes do app da Meta,
-confere a assinatura, descarta repetidos e entrega um evento por mensagem nova, com a config do
-cliente. ID fixo `waInboundWebhook`. Abordagem: [docs/arquitetura/whatsapp.md](../../docs/arquitetura/whatsapp.md#entrada-d016).
+Entrada única do WhatsApp (D016, D027, D028). Recebe os eventos de todos os clientes do app da
+Meta, confere a assinatura, descarta repetidos, junta as mensagens seguidas de cada lead, respeita
+a pausa do atendimento humano e entrega um evento por rajada, com a config do cliente. ID fixo
+`waInboundWebhook`. Abordagem: [docs/arquitetura/whatsapp.md](../../docs/arquitetura/whatsapp.md#entrada-d016).
 
 ## Como funciona
 
@@ -12,30 +13,71 @@ cliente. ID fixo `waInboundWebhook`. Abordagem: [docs/arquitetura/whatsapp.md](.
   `hub.mode=subscribe` e o token certo, devolve 200 com o `hub.challenge`; senão, 403.
 - `POST /webhook/whatsapp` (**WhatsApp events**): responde 200 na hora e depois:
   1. **Compute signature**: HMAC-SHA256 do corpo bruto com o App Secret.
-  2. **Parse events**: compara com o cabeçalho `X-Hub-Signature-256` e lê o campo `messages`.
-     Texto vira `text`; resposta de botão ou lista, `reply`; os demais tipos (áudio, imagem,
-     localização etc.), `unsupported`, que a conversa manda para a equipe. Status `failed` vai
-     para o log. São descartados: `history`, `smb_app_state_sync`, `account_update`, os demais
-     status, reações e mensagens de sistema. O eco da equipe (`smb_message_echoes`) fica para a
-     T020.
-  3. **Ensure message table** cria a Data table `whatsapp_processed_messages` se ela ainda não
-     existe; **Is new message** descarta IDs já vistos; **Record message** guarda o ID.
+  2. **Parse events**: compara com o cabeçalho `X-Hub-Signature-256` e lê dois campos. Em
+     `messages`, texto vira `text`; resposta de botão ou lista, `reply`; os demais tipos (áudio,
+     imagem, localização etc.), `unsupported`, que a conversa manda para a equipe. Em
+     `smb_message_echoes`, a mensagem que a equipe mandou pelo app vira um eco. Status `failed`
+     vai para o log. São descartados: `history`, `smb_app_state_sync`, `account_update`, os
+     demais status, reações e mensagens de sistema.
+  3. **Ensure message table**, **Ensure pause table** e **Ensure buffer table** criam as tabelas
+     que ainda não existem; **Is new message** descarta IDs já vistos; **Record message** guarda
+     o ID.
   4. **Load client config** acha o cliente ativo pelo número ([load-client-config](../load-client-config/README.md));
-     **Build event** monta o evento.
-- **Every day**, às 3h: apaga os IDs com mais de 7 dias, o prazo em que a Meta ainda reenvia um
-  evento.
+     **Build event** monta o evento da mensagem ou a chave de pausa do eco.
+  5. Eco da equipe: **Pause for team** pausa o lead por 24 h.
+  6. Mensagem: **Buffer message** guarda a mensagem na tabela de rajadas e **Wait for silence**
+     espera 8 s. Só a execução da mensagem mais recente do lead segue (**Latest per lead**,
+     **Read burst**, **Group burst**): ela junta todas as mensagens guardadas num evento só e
+     apaga essas linhas (**Delete burst rows**). As execuções anteriores param aí.
+  7. **Read pause** e **Is not paused**: rajada de lead pausado é descartada, sem resposta e sem
+     marcar como lida. **Burst event** entrega o evento.
+- **Every day**, às 3h, apaga IDs com mais de 7 dias (o prazo em que a Meta ainda reenvia um
+  evento), pausas vencidas e linhas de rajada com mais de 1 hora, que só sobram se uma execução
+  falhar no meio.
 
 A ordem de execução é a "v1": entre ramos que saem do mesmo nó, o de cima roda inteiro antes. É
-isso que cria a tabela antes da deduplicação e grava o ID antes de carregar o cliente. Ao editar
-no n8n, não mude a altura desses nós.
+isso que cria as tabelas antes de usá-las, grava o ID antes de carregar o cliente, lê a rajada
+antes da pausa e apaga as linhas antes de entregar o evento. Ao editar no n8n, não mude a altura
+desses nós.
 
 ## Saída
 
-Um item por mensagem nova de cliente ativo, `{ "event": {...}, "config": {...} }`. O `event`
-segue o formato de [docs/arquitetura/whatsapp.md](../../docs/arquitetura/whatsapp.md#entrada-d016)
+Um item por rajada de lead ativo e não pausado, `{ "event": {...}, "config": {...} }`, na saída
+de **Burst event**. O `event` segue o formato de [docs/arquitetura/whatsapp.md](../../docs/arquitetura/whatsapp.md#entrada-d016)
 (`clientId`, `channel`, `leadId`, `phone`, `name`, `messageIds`, `type`, `text`, `replyId`,
-`receivedAt`), com uma mensagem por evento até a T020 agrupar as rajadas. A conversa (T028) parte
-daqui. Mensagem de número sem cliente ativo para no log.
+`receivedAt`):
+
+- `messageIds`: todas as mensagens da rajada, na ordem em que chegaram;
+- `text`: os textos da rajada (inclusive o rótulo de botão ou lista), um por linha;
+- `type`: `unsupported` se a rajada tiver mídia; senão `reply` se tiver resposta de botão ou
+  lista, com o `replyId` da última; senão `text`;
+- `receivedAt`: a hora da última mensagem.
+
+A conversa (T028) parte daqui.
+
+## Tabelas
+
+Data tables do n8n, criadas pelo próprio fluxo e referenciadas pelo nome (D027).
+
+| Tabela | Colunas | Limpeza |
+|--------|---------|---------|
+| `whatsapp_processed_messages` | `messageId` | 7 dias |
+| `whatsapp_message_buffer` | `clientId`, `leadId`, `messageId`, `type`, `text`, `replyId`, `receivedAt` | ao responder a rajada; sobras com mais de 1 hora |
+| `whatsapp_lead_pauses` | `clientId`, `leadKey`, `pausedUntil`, `reason` | depois de vencida |
+
+A tabela de rajadas é a única que guarda texto do lead, por segundos (D028).
+
+## Pausa
+
+Uma linha por cliente e lead em `whatsapp_lead_pauses`. Enquanto `pausedUntil` não passar, a
+entrada não entrega as rajadas daquele lead (D028).
+
+- `leadKey` é o BSUID do lead. Eco sem BSUID usa `tel:` mais o telefone; a checagem confere as
+  duas chaves.
+- `reason`: `team` (eco da equipe, gravado aqui), `handoff`, `urgent` e `stop` (gravados pela
+  conversa, T028).
+- Para pausar, a conversa faz um upsert com os filtros `clientId` e `leadKey` iguais e
+  `pausedUntil` daqui a 24 h. Cada novo motivo reinicia as 24 h.
 
 ## Logs
 
@@ -47,11 +89,24 @@ O aviso por e-mail à agência fica para a T027.
 | `whatsapp_verification_rejected` | GET sem o verify token certo. |
 | `whatsapp_invalid_signature` | POST sem assinatura ou com assinatura de outro segredo. |
 | `whatsapp_unexpected_payload` | Corpo assinado que não é notificação do WhatsApp. |
-| `whatsapp_invalid_payload`, `whatsapp_invalid_message` | Notificação sem o número da empresa, ou mensagem sem ID ou BSUID. |
+| `whatsapp_invalid_payload`, `whatsapp_invalid_message`, `whatsapp_invalid_echo` | Notificação sem o número da empresa, mensagem sem ID ou BSUID, ou eco sem ID nem lead. |
 | `whatsapp_failed_status` | Mensagem enviada que falhou; traz `phoneNumberId` e `errorCodes`. |
 | `whatsapp_webhook_error` | Erro geral da Meta na notificação, com os códigos. |
 | `whatsapp_unknown_client` | Número sem cliente ativo; traz `phoneNumberId` e `reason` do loader. |
 | `client_configs_invalid` | Pastas de `clients/` com config ilegível. |
+| `whatsapp_team_reply` | A equipe respondeu pelo app; o lead foi pausado. Traz `clientId`. |
+| `whatsapp_paused_lead` | Rajada descartada porque o lead está pausado. Traz `clientId`. |
+
+## Limites conhecidos
+
+- A documentação da Meta mostra o eco com o telefone do lead (`to`) e não diz se ele traz o BSUID.
+  O fluxo usa `to_user_id` quando vier e, sem ele, pausa pelo telefone; lead com nome de usuário
+  e sem telefone não é pausado pelo eco.
+- A pausa por eco supõe que a Meta só manda eco das mensagens enviadas pelo app, e não das
+  enviadas pela API. Se o eco trouxer também as da API, toda resposta automática pausaria o
+  lead: conferir no primeiro cliente em coexistência (B012).
+- O número de teste da Meta não usa o app e não gera eco: a pausa por eco só foi testada com
+  eventos simulados.
 
 ## Instalar numa instância
 
@@ -68,9 +123,11 @@ O aviso por e-mail à agência fica para a T027.
    docker compose --env-file .env -f infra/n8n/compose.yaml restart n8n
    ```
 
+   O `publish:workflow` precisa responder "Publishing workflow with ID: waInboundWebhook". Sem
+   essa linha, publicar de novo antes de reiniciar.
 3. O JSON não leva credenciais (D022): no editor, selecionar `WhatsApp App Secret` nos nós
    **Derive verify token (HMAC)** e **Compute signature**, salvar e publicar de novo.
-4. A Data table é criada sozinha na primeira mensagem. O loader precisa estar publicado.
+4. As tabelas são criadas sozinhas na primeira mensagem. O loader precisa estar publicado.
 
 ## Ligar o app de teste da Meta
 
@@ -103,12 +160,17 @@ Com o n8n local ligado. Painel da Meta: [developers.facebook.com](https://develo
 
 - Automático: `npm test -- tests/whatsapp-inbound.test.ts` roda o código dos nós deste JSON com
   as fixtures de [tests/fixtures/whatsapp/](../../tests/fixtures/whatsapp/). Cobre verificação,
-  assinatura, tipos de mensagem, status `failed`, descartes, lote, logs sem dados pessoais e o
-  formato do evento, e confere ligações, ordem dos ramos e a Data table.
-- No n8n local: na T019, uma credencial de teste e um cliente fictício temporário permitiram
-  simular a Meta com requisições assinadas. Foram conferidos: desafio aceito e recusado, texto
-  com acentos escapados e sem escapar, duplicata, assinatura errada e ausente, botão, lista,
-  usuário sem telefone, áudio, status `failed`, histórico, número desconhecido, lote com duas
-  mensagens, corpo que não é da Meta, gatilho do verify token e limpeza da tabela.
+  assinatura, tipos de mensagem, eco da equipe, status `failed`, descartes, lote, agrupamento da
+  rajada, pausa, logs sem dados pessoais e o formato do evento, e confere ligações, ordem dos
+  ramos e as tabelas.
+- No n8n local, com uma credencial de teste e um cliente fictício temporário, requisições
+  assinadas simularam a Meta.
+  - Na T019: desafio aceito e recusado, texto com acentos escapados e sem escapar, duplicata,
+    assinatura errada e ausente, botão, lista, usuário sem telefone, áudio, status `failed`,
+    histórico, número desconhecido, lote, corpo que não é da Meta, gatilho do verify token e
+    limpeza.
+  - Na T020: mensagem única, rajada de duas mensagens, rajada com botão e com áudio, lote do
+    mesmo lead, eco com BSUID e só com telefone, eco durante a espera, segundo eco na mesma
+    linha, pausa vencida e limpeza diária das três tabelas.
 - Depois de editar no n8n: exportar de novo para `workflow.json`, limpo conforme a D022, e rodar
   `npm test`, `npm run lint` e `npm run check:workflows`.

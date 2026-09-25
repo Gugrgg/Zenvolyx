@@ -46,7 +46,8 @@ inativa para testes internos ([clients/zenvolyx](../../clients/zenvolyx/README.m
 6. **A qualquer momento.**
    - `urgent`: a conversa comercial para; `messages.urgent`, CRM `urgent` e pausa de 24 h (D026).
    - `human`: `messages.handoff`, CRM `with_team` e pausa de 24 h (D016).
-   - `stop`: `messages.stopped`, recusa registrada e CRM `stopped`.
+   - `stop`: `messages.stopped`, recusa registrada, CRM `stopped` e pausa de 24 h.
+   - As pausas vão para a tabela de pausas da entrada (D028).
    - Falha: `messages.failure` e equipe.
 
 Na demo, chamar a equipe é deixar o lead na planilha com a etapa certa. O aviso por e-mail à
@@ -57,8 +58,9 @@ responde por outro canal. Com clientes em coexistência (D023), a equipe respond
 ## Estado da conversa (D020)
 
 Uma tabela interna do n8n guarda, por cliente e BSUID: etapa, índice da pergunta atual, respostas
-às perguntas da config, falhas seguidas, horários oferecidos, pausa, recusa e data da última
-interação. Linhas sem interação há 30 dias são apagadas. Texto livre do lead não entra na tabela.
+às perguntas da config, falhas seguidas, horários oferecidos, recusa e data da última interação.
+Linhas sem interação há 30 dias são apagadas. Texto livre do lead não entra na tabela. A pausa fica
+na tabela de pausas da entrada (D028).
 
 ## Preparação (dono)
 
