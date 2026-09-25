@@ -10,6 +10,7 @@ type WorkflowNode = {
   parameters: Record<string, unknown>;
   credentials?: unknown;
   executeOnce?: boolean;
+  alwaysOutputData?: boolean;
 };
 
 type Workflow = {
@@ -36,9 +37,12 @@ const workflow = JSON.parse(
 ) as Workflow;
 
 const SECRET = "segredo-ficticio-de-teste";
-const TABLE = "whatsapp_processed_messages";
+const PROCESSED = "whatsapp_processed_messages";
+const PAUSES = "whatsapp_lead_pauses";
+const BUFFER = "whatsapp_message_buffer";
 const LEAD = "BR.0000000000000000019";
 const PHONE = "5500000000019";
+const CLIENT = "odontologia-demo";
 
 function node(name: string): WorkflowNode {
   const found = workflow.nodes.find((candidate) => candidate.name === name);
@@ -58,28 +62,33 @@ function above(first: string, second: string): boolean {
   return node(first).position[1] < node(second).position[1];
 }
 
-function fixture(name: string): Json {
+function fixture<T = Json>(name: string): T {
   return JSON.parse(
     readFileSync(
       new URL(`./fixtures/whatsapp/${name}.json`, import.meta.url),
       "utf8",
     ),
-  ) as Json;
+  ) as T;
 }
 
+// Roda o código de um nó Code deste JSON; `nodes` simula a saída de outros nós ($('Nó')).
 async function runCode(
   name: string,
   inputs: Json[],
-  matching: Json[] = [],
+  nodes: Record<string, Json[]> = {},
 ): Promise<{ output: Json[]; logs: string[] }> {
   const logs: string[] = [];
   const jsCode = node(name).parameters.jsCode as string;
   const $input = { all: () => inputs.map((json) => ({ json })) };
   const $ = (target: string) => {
-    if (target !== "Is new message") {
+    const items = nodes[target];
+    if (items === undefined) {
       throw new Error(`Nó inesperado: ${target}`);
     }
-    return { itemMatching: (index: number) => ({ json: matching[index] }) };
+    return {
+      all: () => items.map((json) => ({ json })),
+      itemMatching: (index: number) => ({ json: items[index] }),
+    };
   };
   const console = { log: (line: string) => logs.push(line) };
   const run = new AsyncFunction("$input", "$", "console", jsCode);
@@ -103,6 +112,14 @@ function signedRequest(body: Json, headerSecret = SECRET): Json {
 
 async function parse(body: Json): Promise<{ output: Json[]; logs: string[] }> {
   return runCode("Parse events", [signedRequest(body)]);
+}
+
+function change(body: Json): Json {
+  return ((body.entry as Json[])[0].changes as Json[])[0];
+}
+
+function changeValue(body: Json): Json {
+  return change(body).value as Json;
 }
 
 function messagesChange(value: Json): Json {
@@ -182,7 +199,7 @@ describe("workflow", () => {
     });
   });
 
-  test("wires both verification triggers and the POST path", () => {
+  test("wires the verification, the POST path, the echo branch and the burst branch", () => {
     expect(targets("Meta verification request")).toEqual([
       "Derive verify token (HMAC)",
     ]);
@@ -198,59 +215,117 @@ describe("workflow", () => {
     expect(targets("WhatsApp events")).toEqual(["Compute signature"]);
     expect(targets("Compute signature")).toEqual(["Parse events"]);
     expect(targets("Load client config")).toEqual(["Build event"]);
+    expect(targets("Build event")).toEqual(["Is echo"]);
+    expect(targets("Is echo", 0)).toEqual(["Pause for team"]);
+    expect(targets("Is echo", 1)).toEqual(["Buffer message"]);
+    expect(targets("Buffer message")).toEqual(["Wait for silence"]);
+    expect(targets("Wait for silence")).toEqual(["Latest per lead"]);
+    expect(targets("Read pause")).toEqual(["Group burst"]);
+    expect(targets("Is not paused", 0)).toEqual(["Burst event"]);
+    expect(targets("Is not paused", 1)).toEqual([]);
+    expect(node("Wait for silence").parameters).toEqual({
+      resume: "timeInterval",
+      amount: 8,
+      unit: "seconds",
+    });
   });
 
-  test("creates the table before deduplicating and records before loading the client", () => {
-    // Com executionOrder v1, o ramo de cima roda inteiro antes do de baixo.
-    expect(targets("Parse events")).toEqual([
-      "Ensure message table",
-      "Is new message",
-    ]);
-    expect(above("Ensure message table", "Is new message")).toBe(true);
-    expect(targets("Is new message")).toEqual([
-      "Record message",
-      "Load client config",
-    ]);
-    expect(above("Record message", "Load client config")).toBe(true);
-    expect(targets("Every day")).toEqual([
-      "Ensure message table (daily)",
-      "Delete old message IDs",
-    ]);
-    expect(
-      above("Ensure message table (daily)", "Delete old message IDs"),
-    ).toBe(true);
-    expect(node("Ensure message table").executeOnce).toBe(true);
-  });
-
-  test("uses one Data table by name, created on demand and cleaned after 7 days", () => {
-    const tables = workflow.nodes.filter(
-      (item) => item.type === "n8n-nodes-base.dataTable",
-    );
-
-    expect(tables).toHaveLength(5);
-    for (const name of [
-      "Ensure message table",
-      "Ensure message table (daily)",
-    ]) {
-      expect(node(name).parameters).toEqual({
-        resource: "table",
-        operation: "create",
-        tableName: TABLE,
-        columns: { column: [{ name: "messageId", type: "string" }] },
-        options: { createIfNotExists: true },
-      });
+  test("runs the upper branch first where the order matters", () => {
+    // Com executionOrder v1, entre ramos do mesmo nó o de cima roda inteiro antes.
+    const branches: [string, string[]][] = [
+      ["Parse events", ["Ensure message table", "Is new message"]],
+      ["Is new message", ["Record message", "Load client config"]],
+      ["Latest per lead", ["Read burst", "Read pause"]],
+      ["Group burst", ["Delete burst rows", "Is not paused"]],
+      [
+        "Every day",
+        [
+          "Ensure message table (daily)",
+          "Delete old message IDs",
+          "Delete expired pauses",
+          "Delete stale buffer rows",
+        ],
+      ],
+    ];
+    for (const [from, expected] of branches) {
+      expect(targets(from)).toEqual(expected);
+      for (let index = 1; index < expected.length; index++) {
+        expect(above(expected[index - 1], expected[index])).toBe(true);
+      }
     }
-    for (const name of [
-      "Is new message",
-      "Record message",
-      "Delete old message IDs",
-    ]) {
-      expect(node(name).parameters.dataTableId).toEqual({
+  });
+
+  test("creates the three tables before using them, on each path", () => {
+    const tables = [
+      [PROCESSED, "Ensure message table"],
+      [PAUSES, "Ensure pause table"],
+      [BUFFER, "Ensure buffer table"],
+    ];
+    for (const suffix of ["", " (daily)"]) {
+      for (const [tableName, name] of tables) {
+        expect(node(`${name}${suffix}`).parameters).toMatchObject({
+          resource: "table",
+          operation: "create",
+          tableName,
+          options: { createIfNotExists: true },
+        });
+      }
+      expect(targets(`Ensure message table${suffix}`)).toEqual([
+        `Ensure pause table${suffix}`,
+      ]);
+      expect(targets(`Ensure pause table${suffix}`)).toEqual([
+        `Ensure buffer table${suffix}`,
+      ]);
+    }
+    for (const [, name] of tables) {
+      expect(node(name).executeOnce).toBe(true);
+    }
+  });
+
+  test("gives each table the columns its writers use", () => {
+    const columns = (name: string) =>
+      (
+        (node(name).parameters.columns as { column: { name: string }[] })
+          .column ?? []
+      ).map((column) => column.name);
+    const written = (name: string) =>
+      Object.keys(
+        (node(name).parameters.columns as { value: Json }).value,
+      ).sort();
+
+    expect(columns("Ensure message table")).toEqual(written("Record message"));
+    expect(columns("Ensure pause table").sort()).toEqual(
+      written("Pause for team"),
+    );
+    expect(columns("Ensure buffer table").sort()).toEqual(
+      written("Buffer message"),
+    );
+    expect(
+      (
+        node("Ensure pause table").parameters.columns as {
+          column: { name: string; type: string }[];
+        }
+      ).column.find((column) => column.name === "pausedUntil")?.type,
+    ).toBe("date");
+  });
+
+  test("refers to every table by name, so the JSON works on any instance", () => {
+    for (const item of workflow.nodes.filter(
+      (candidate) =>
+        candidate.type === "n8n-nodes-base.dataTable" &&
+        candidate.parameters.resource === "row",
+    )) {
+      expect(item.parameters.dataTableId).toMatchObject({
         __rl: true,
-        value: TABLE,
         mode: "name",
       });
+      expect([PROCESSED, PAUSES, BUFFER]).toContain(
+        (item.parameters.dataTableId as Json).value,
+      );
     }
+  });
+
+  test("deduplicates by message ID and cleans each table on schedule", () => {
     expect(node("Is new message").parameters).toMatchObject({
       operation: "rowNotExists",
       filters: {
@@ -263,20 +338,103 @@ describe("workflow", () => {
       operation: "insert",
       columns: { value: { messageId: "={{ $json.messageId }}" } },
     });
-    expect(node("Delete old message IDs").parameters).toMatchObject({
-      operation: "deleteRows",
+    const cleanups: [string, string, string, string][] = [
+      [
+        "Delete old message IDs",
+        PROCESSED,
+        "createdAt",
+        "={{ $now.minus({ days: 7 }).toISO() }}",
+      ],
+      ["Delete expired pauses", PAUSES, "pausedUntil", "={{ $now.toISO() }}"],
+      [
+        "Delete stale buffer rows",
+        BUFFER,
+        "createdAt",
+        "={{ $now.minus({ hours: 1 }).toISO() }}",
+      ],
+    ];
+    for (const [name, value, keyName, keyValue] of cleanups) {
+      expect(node(name).parameters).toMatchObject({
+        operation: "deleteRows",
+        dataTableId: { value },
+        filters: { conditions: [{ keyName, condition: "lt", keyValue }] },
+      });
+    }
+    expect(node("Every day").parameters).toEqual({
+      rule: { interval: [{ field: "days", triggerAtHour: 3 }] },
+    });
+  });
+
+  test("pauses a lead for 24 hours on a team echo, one row per lead", () => {
+    expect(node("Pause for team").parameters).toMatchObject({
+      operation: "upsert",
+      dataTableId: { value: PAUSES },
+      matchType: "allConditions",
       filters: {
         conditions: [
           {
-            keyName: "createdAt",
-            condition: "lt",
-            keyValue: "={{ $now.minus({ days: 7 }).toISO() }}",
+            keyName: "clientId",
+            condition: "eq",
+            keyValue: "={{ $json.clientId }}",
+          },
+          {
+            keyName: "leadKey",
+            condition: "eq",
+            keyValue: "={{ $json.leadKey }}",
           },
         ],
       },
+      columns: {
+        value: {
+          clientId: "={{ $json.clientId }}",
+          leadKey: "={{ $json.leadKey }}",
+          pausedUntil: "={{ $now.plus({ hours: 24 }).toISO() }}",
+          reason: "team",
+        },
+      },
     });
-    expect(node("Every day").parameters).toEqual({
-      rule: { interval: [{ field: "days", triggerAtHour: 3 }] },
+  });
+
+  test("reads the burst and the active pauses, and deletes only the rows it answered", () => {
+    expect(node("Read burst").parameters).toMatchObject({
+      operation: "get",
+      dataTableId: { value: BUFFER },
+      matchType: "allConditions",
+      returnAll: true,
+    });
+    expect(node("Read pause").parameters).toMatchObject({
+      operation: "get",
+      dataTableId: { value: PAUSES },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "clientId", keyValue: "={{ $json.clientId }}" },
+          {
+            keyName: "pausedUntil",
+            condition: "gt",
+            keyValue: "={{ $now.toISO() }}",
+          },
+        ],
+      },
+      returnAll: true,
+    });
+    expect(node("Read burst").alwaysOutputData).toBe(true);
+    expect(node("Read pause").alwaysOutputData).toBe(true);
+    expect(node("Delete burst rows").parameters).toMatchObject({
+      operation: "deleteRows",
+      dataTableId: { value: BUFFER },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "clientId", keyValue: "={{ $json.clientId }}" },
+          { keyName: "leadId", keyValue: "={{ $json.leadId }}" },
+          {
+            keyName: "id",
+            condition: "lte",
+            keyValue: "={{ $json.maxRowId }}",
+          },
+        ],
+      },
     });
   });
 
@@ -334,6 +492,7 @@ describe("Check verification", () => {
 
 describe("Parse events", () => {
   const message = {
+    kind: "message",
     phoneNumberId: "000000000019001",
     leadId: LEAD,
     phone: PHONE,
@@ -361,6 +520,7 @@ describe("Parse events", () => {
 
     expect(output).toEqual([
       {
+        kind: "message",
         phoneNumberId: "000000000019001",
         messageId: "wamid.T019.usuario.0001",
         leadId: "BR.0000000000000000020",
@@ -404,6 +564,45 @@ describe("Parse events", () => {
     ]);
   });
 
+  test("reads a team echo with the lead's BSUID and phone", async () => {
+    const { output, logs } = await parse(fixture("inbound-echo"));
+
+    expect(output).toEqual([
+      {
+        kind: "echo",
+        phoneNumberId: "000000000019001",
+        messageId: "wamid.T020.eco.0001",
+        leadId: LEAD,
+        phone: PHONE,
+      },
+    ]);
+    expect(logs).toEqual([]);
+  });
+
+  test("accepts an echo with only the phone and drops one without the lead", async () => {
+    const phoneOnly = fixture("inbound-echo");
+    const echo = (changeValue(phoneOnly).message_echoes as Json[])[0];
+    echo.to_user_id = undefined;
+    const withoutLead = structuredClone(phoneOnly);
+    (changeValue(withoutLead).message_echoes as Json[])[0].to = undefined;
+
+    expect((await parse(phoneOnly)).output).toEqual([
+      {
+        kind: "echo",
+        phoneNumberId: "000000000019001",
+        messageId: "wamid.T020.eco.0001",
+        leadId: null,
+        phone: PHONE,
+      },
+    ]);
+    expect(await parse(withoutLead)).toEqual({
+      output: [],
+      logs: [
+        '{"event":"whatsapp_invalid_echo","phoneNumberId":"000000000019001"}',
+      ],
+    });
+  });
+
   test("logs a failed status with codes only", async () => {
     const { output, logs } = await parse(fixture("inbound-status-failed"));
 
@@ -413,13 +612,12 @@ describe("Parse events", () => {
     ]);
   });
 
-  test("drops history, echoes, other statuses, reactions and system messages silently", async () => {
+  test("drops history, app state, other statuses, reactions and system messages silently", async () => {
     const delivered = messagesChange({
       statuses: [{ id: "wamid.x", status: "delivered", recipient_id: PHONE }],
     });
-    const echo = fixture("inbound-text");
-    const echoChange = (echo.entry as Json[])[0].changes as Json[];
-    echoChange[0].field = "smb_message_echoes";
+    const appState = fixture("inbound-text");
+    change(appState).field = "smb_app_state_sync";
     const ignored = messagesChange({
       contacts: [{ user_id: LEAD }],
       messages: [
@@ -439,7 +637,12 @@ describe("Parse events", () => {
       ],
     });
 
-    for (const body of [fixture("inbound-history"), delivered, echo, ignored]) {
+    for (const body of [
+      fixture("inbound-history"),
+      delivered,
+      appState,
+      ignored,
+    ]) {
       expect(await parse(body)).toEqual({ output: [], logs: [] });
     }
   });
@@ -448,13 +651,13 @@ describe("Parse events", () => {
     ["a signature from another secret", { headerSecret: "outro-segredo" }],
     ["no signature header", { header: undefined }],
     ["a missing computed signature", { computed: undefined }],
-  ])("rejects %s without reading the body", async (_case, change) => {
+  ])("rejects %s without reading the body", async (_case, variation) => {
     const request = signedRequest(
       fixture("inbound-text"),
-      "headerSecret" in change ? change.headerSecret : SECRET,
+      "headerSecret" in variation ? variation.headerSecret : SECRET,
     );
-    if ("header" in change) request.headers = {};
-    if ("computed" in change) request.computedSignature = undefined;
+    if ("header" in variation) request.headers = {};
+    if ("computed" in variation) request.computedSignature = undefined;
 
     const { output, logs } = await runCode("Parse events", [request]);
 
@@ -489,10 +692,7 @@ describe("Parse events", () => {
       messages: [{ from_user_id: LEAD, type: "text", text: { body: "Oi" } }],
     });
     const noMetadata = fixture("inbound-text");
-    const noMetadataValue = (
-      (noMetadata.entry as Json[])[0].changes as Json[]
-    )[0].value as Json;
-    noMetadataValue.metadata = {};
+    changeValue(noMetadata).metadata = {};
 
     for (const body of [noLead, badLead, noId]) {
       expect(await parse(body)).toEqual({
@@ -544,9 +744,12 @@ describe("Parse events", () => {
   test("never logs personal data", async () => {
     const logs = (
       await Promise.all(
-        ["inbound-status-failed", "inbound-text", "inbound-audio"].map(
-          async (name) => (await parse(fixture(name))).logs,
-        ),
+        [
+          "inbound-status-failed",
+          "inbound-text",
+          "inbound-audio",
+          "inbound-echo",
+        ].map(async (name) => (await parse(fixture(name))).logs),
       )
     ).flat();
 
@@ -558,6 +761,7 @@ describe("Parse events", () => {
 
 describe("Build event", () => {
   const parsed = {
+    kind: "message",
     phoneNumberId: "000000000019001",
     messageId: "wamid.T019.texto.0001",
     leadId: LEAD,
@@ -568,19 +772,19 @@ describe("Build event", () => {
     replyId: null,
     receivedAt: "2026-09-21T14:13:20.000Z",
   };
-  const config = { id: "odontologia-demo", active: true };
+  const config = { id: CLIENT, active: true };
+  const found = { found: true, config, invalidConfigs: [] };
 
   test("builds the event from the documented format, with the client config", async () => {
-    const { output, logs } = await runCode(
-      "Build event",
-      [{ found: true, config, invalidConfigs: [] }],
-      [parsed],
-    );
+    const { output, logs } = await runCode("Build event", [found], {
+      "Is new message": [parsed],
+    });
 
     expect(output).toEqual([
       {
+        kind: "message",
         event: {
-          clientId: "odontologia-demo",
+          clientId: CLIENT,
           channel: "whatsapp",
           leadId: LEAD,
           phone: PHONE,
@@ -597,6 +801,28 @@ describe("Build event", () => {
     expect(logs).toEqual([]);
   });
 
+  test("turns a team echo into a pause key: the BSUID, or the phone when it is missing", async () => {
+    const echo = {
+      kind: "echo",
+      phoneNumberId: "000000000019001",
+      messageId: "wamid.T020.eco.0001",
+      leadId: LEAD,
+      phone: PHONE,
+    };
+    const { output, logs } = await runCode("Build event", [found, found], {
+      "Is new message": [echo, { ...echo, leadId: null }],
+    });
+
+    expect(output).toEqual([
+      { kind: "echo", clientId: CLIENT, leadKey: LEAD },
+      { kind: "echo", clientId: CLIENT, leadKey: `tel:${PHONE}` },
+    ]);
+    expect(logs).toEqual([
+      '{"event":"whatsapp_team_reply","clientId":"odontologia-demo"}',
+      '{"event":"whatsapp_team_reply","clientId":"odontologia-demo"}',
+    ]);
+  });
+
   test("stops unknown clients and reports unreadable configs, without personal data", async () => {
     const { output, logs } = await runCode(
       "Build event",
@@ -604,7 +830,7 @@ describe("Build event", () => {
         { found: false, reason: "not_found", invalidConfigs: ["quebrado"] },
         { found: true, config, invalidConfigs: ["quebrado"] },
       ],
-      [parsed, parsed],
+      { "Is new message": [parsed, parsed] },
     );
 
     expect(output).toHaveLength(1);
@@ -613,6 +839,187 @@ describe("Build event", () => {
       '{"event":"whatsapp_unknown_client","phoneNumberId":"000000000019001","reason":"not_found"}',
       '{"event":"client_configs_invalid","folders":["quebrado"]}',
     ]);
+  });
+});
+
+describe("bursts and pauses", () => {
+  const config = { id: CLIENT };
+  const event = (overrides: Json = {}) => ({
+    clientId: CLIENT,
+    channel: "whatsapp",
+    leadId: LEAD,
+    phone: PHONE,
+    name: "Paciente Fictícia",
+    messageIds: ["wamid.3"],
+    type: "text",
+    text: "terceira",
+    replyId: null,
+    receivedAt: "2026-09-25T12:00:09.000Z",
+    ...overrides,
+  });
+  const row = (id: number, overrides: Json = {}) => ({
+    id,
+    clientId: CLIENT,
+    leadId: LEAD,
+    messageId: `wamid.${id}`,
+    type: "text",
+    text: `mensagem ${id}`,
+    replyId: null,
+    receivedAt: `2026-09-25T12:00:0${id}.000Z`,
+    ...overrides,
+  });
+  const lead = (ownMaxId: number, leadId = LEAD) => ({
+    clientId: CLIENT,
+    leadId,
+    ownMaxId,
+  });
+
+  async function group(
+    rows: Json[],
+    pauses: Json[] = [{}],
+    leads: Json[] = [lead(3)],
+    messages: Json[] = [{ kind: "message", event: event(), config }],
+  ) {
+    return runCode("Group burst", pauses, {
+      "Read burst": rows.length > 0 ? rows : [{}],
+      "Latest per lead": leads,
+      "Build event": messages,
+    });
+  }
+
+  test("keeps one entry per lead with the highest row this execution wrote", async () => {
+    const other = "BR.0000000000000000020";
+    const { output } = await runCode("Latest per lead", [
+      row(1),
+      row(4, { leadId: other }),
+      row(2),
+    ]);
+
+    expect(output).toEqual([lead(2), lead(4, other)]);
+  });
+
+  test("answers the whole burst from the execution of the latest message", async () => {
+    const { output, logs } = await group([row(2), row(1), row(3)]);
+
+    expect(output).toEqual([
+      {
+        clientId: CLIENT,
+        leadId: LEAD,
+        maxRowId: 3,
+        paused: false,
+        event: event({
+          messageIds: ["wamid.1", "wamid.2", "wamid.3"],
+          text: "mensagem 1\nmensagem 2\nmensagem 3",
+          receivedAt: "2026-09-25T12:00:03.000Z",
+        }),
+        config,
+      },
+    ]);
+    expect(logs).toEqual([]);
+  });
+
+  test("stops an older execution when a newer message is waiting", async () => {
+    expect(
+      (await group([row(1), row(2), row(3)], [{}], [lead(2)])).output,
+    ).toEqual([]);
+  });
+
+  test("stops when another execution already answered its rows", async () => {
+    expect((await group([row(4)], [{}], [lead(3)])).output).toEqual([]);
+    expect((await group([], [{}], [lead(3)])).output).toEqual([]);
+  });
+
+  test("uses the last button or list answer, and sends media to the team", async () => {
+    const replies = await group([
+      row(1, { type: "reply", text: "Implante", replyId: "implant" }),
+      row(2),
+      row(3, { type: "reply", text: "Sim, primeira vez", replyId: "new" }),
+    ]);
+    const media = await group([
+      row(1, { type: "unsupported", text: null }),
+      row(2, { type: "reply", text: "Implante", replyId: "implant" }),
+      row(3),
+    ]);
+
+    expect(replies.output[0].event).toMatchObject({
+      type: "reply",
+      replyId: "new",
+      text: "Implante\nmensagem 2\nSim, primeira vez",
+    });
+    expect(media.output[0].event).toMatchObject({
+      type: "unsupported",
+      replyId: null,
+      text: "Implante\nmensagem 3",
+    });
+  });
+
+  test.each([
+    ["the BSUID", LEAD],
+    ["the phone of an echo without BSUID", `tel:${PHONE}`],
+  ])("marks the burst as paused by %s", async (_case, leadKey) => {
+    const { output, logs } = await group(
+      [row(1), row(3)],
+      [{ clientId: CLIENT, leadKey, pausedUntil: "2026-09-26T12:00:00.000Z" }],
+    );
+
+    expect(output[0]).toMatchObject({ paused: true, maxRowId: 3 });
+    expect(logs).toEqual([
+      '{"event":"whatsapp_paused_lead","clientId":"odontologia-demo"}',
+    ]);
+  });
+
+  test("ignores pauses of another lead or client, and the phone key when the phone is hidden", async () => {
+    const pauses = [
+      { clientId: "outra-clinica", leadKey: LEAD },
+      { clientId: CLIENT, leadKey: "BR.0000000000000000020" },
+      { clientId: CLIENT, leadKey: "tel:null" },
+    ];
+    const hidden = [{ kind: "message", event: event({ phone: null }), config }];
+
+    expect((await group([row(3)], pauses)).output[0].paused).toBe(false);
+    expect(
+      (await group([row(3)], pauses, [lead(3)], hidden)).output[0].paused,
+    ).toBe(false);
+  });
+
+  test("handles several leads in one execution", async () => {
+    const other = "BR.0000000000000000020";
+    const { output } = await group(
+      [row(1), row(2, { leadId: other }), row(3)],
+      [{}],
+      [lead(3), lead(2, other)],
+      [
+        { kind: "message", event: event(), config },
+        { kind: "echo", clientId: CLIENT, leadKey: LEAD },
+        {
+          kind: "message",
+          event: event({ leadId: other, messageIds: ["wamid.2"] }),
+          config,
+        },
+      ],
+    );
+
+    expect(
+      output.map((item) => [item.leadId, (item.event as Json).messageIds]),
+    ).toEqual([
+      [LEAD, ["wamid.1", "wamid.3"]],
+      [other, ["wamid.2"]],
+    ]);
+  });
+
+  test("hands the conversation only the event and the config", async () => {
+    const { output } = await runCode("Burst event", [
+      {
+        clientId: CLIENT,
+        leadId: LEAD,
+        maxRowId: 3,
+        paused: false,
+        event: event(),
+        config,
+      },
+    ]);
+
+    expect(output).toEqual([{ event: event(), config }]);
   });
 });
 
@@ -629,7 +1036,7 @@ test("the fixtures of the documented types reach the event format end to end", a
     const { output } = await runCode(
       "Build event",
       messages.map(() => ({ found: true, config: { id: "cliente" } })),
-      messages,
+      { "Is new message": messages },
     );
 
     expect(output).toHaveLength(1);
@@ -646,4 +1053,44 @@ test("the fixtures of the documented types reach the event format end to end", a
       "receivedAt",
     ]);
   }
+});
+
+test("a burst fixture becomes one event with the texts in order", async () => {
+  const bodies = fixture<Json[]>("inbound-burst");
+  const built: Json[] = [];
+  for (const body of bodies) {
+    const { output: messages } = await parse(body);
+    const { output } = await runCode(
+      "Build event",
+      [{ found: true, config: { id: CLIENT } }],
+      { "Is new message": messages },
+    );
+    built.push(...output);
+  }
+  const rows = built.map((item, index) => {
+    const event = item.event as Json;
+    return {
+      id: index + 1,
+      clientId: event.clientId,
+      leadId: event.leadId,
+      messageId: (event.messageIds as string[])[0],
+      type: event.type,
+      text: event.text,
+      replyId: event.replyId,
+      receivedAt: event.receivedAt,
+    };
+  });
+
+  const { output } = await runCode("Group burst", [{}], {
+    "Read burst": rows,
+    "Latest per lead": [{ clientId: CLIENT, leadId: LEAD, ownMaxId: 2 }],
+    "Build event": built,
+  });
+
+  expect(output).toHaveLength(1);
+  expect(output[0].event).toMatchObject({
+    messageIds: ["wamid.T020.rajada.0001", "wamid.T020.rajada.0002"],
+    type: "text",
+    text: "Oi\nQueria marcar uma avaliação",
+  });
 });

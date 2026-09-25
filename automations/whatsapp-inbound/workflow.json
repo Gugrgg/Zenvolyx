@@ -125,7 +125,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const BSUID = /^[A-Z]{2}\\.[A-Za-z0-9.]{1,150}$/;\nconst DIGITS = /^[0-9]{1,30}$/;\nconst MAX_ID_LENGTH = 200;\nconst MAX_TEXT_LENGTH = 4096;\nconst MAX_NAME_LENGTH = 100;\nconst IGNORED_TYPES = ['reaction', 'system', 'request_welcome'];\n\nfunction log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction signatureMatches(json) {\n  const header = json.headers?.['x-hub-signature-256'];\n  const computed = json.computedSignature;\n  if (typeof header !== 'string' || typeof computed !== 'string' || computed.length === 0) {\n    return false;\n  }\n  const expected = `sha256=${computed}`;\n  if (header.length !== expected.length) return false;\n  let difference = 0;\n  for (let index = 0; index < expected.length; index++) {\n    difference |= header.charCodeAt(index) ^ expected.charCodeAt(index);\n  }\n  return difference === 0;\n}\n\nfunction text(value, maxLength) {\n  return typeof value === 'string' && value.trim().length > 0 ? value.slice(0, maxLength) : null;\n}\n\nfunction matching(value, pattern) {\n  return typeof value === 'string' && pattern.test(value) ? value : null;\n}\n\nfunction errorCodes(errors) {\n  return (Array.isArray(errors) ? errors : []).map((error) => error?.code).filter(Number.isInteger);\n}\n\nfunction content(message) {\n  if (message.type === 'text') {\n    const body = text(message.text?.body, MAX_TEXT_LENGTH);\n    if (body !== null) return { type: 'text', text: body, replyId: null };\n  }\n  if (message.type === 'interactive') {\n    const reply = message.interactive?.button_reply ?? message.interactive?.list_reply;\n    const replyId = text(reply?.id, MAX_ID_LENGTH);\n    if (replyId !== null) return { type: 'reply', text: text(reply.title, MAX_TEXT_LENGTH), replyId };\n  }\n  return { type: 'unsupported', text: null, replyId: null };\n}\n\nfunction parseMessage(message, contacts, phoneNumberId) {\n  if (IGNORED_TYPES.includes(message.type)) return null;\n  const contact =\n    contacts.find((candidate) => typeof message.from_user_id === 'string' && candidate?.user_id === message.from_user_id) ??\n    (contacts.length === 1 ? contacts[0] : undefined);\n  const messageId = text(message.id, MAX_ID_LENGTH);\n  const leadId = matching(message.from_user_id ?? contact?.user_id, BSUID);\n  if (messageId === null || leadId === null) {\n    log('whatsapp_invalid_message', { phoneNumberId });\n    return null;\n  }\n  const seconds = Number(message.timestamp);\n  return {\n    phoneNumberId,\n    messageId,\n    leadId,\n    phone: matching(message.from ?? contact?.wa_id, DIGITS),\n    name: text(contact?.profile?.name, MAX_NAME_LENGTH),\n    ...content(message),\n    receivedAt: new Date(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()).toISOString(),\n  };\n}\n\nfunction parseChange(change) {\n  // smb_message_echoes fica para a T020; history, smb_app_state_sync e account_update são descartados (D013).\n  if (change?.field !== 'messages' || typeof change.value !== 'object' || change.value === null) return [];\n  const value = change.value;\n  const phoneNumberId = matching(value.metadata?.phone_number_id, DIGITS);\n  if (phoneNumberId === null) {\n    log('whatsapp_invalid_payload');\n    return [];\n  }\n  for (const status of Array.isArray(value.statuses) ? value.statuses : []) {\n    if (status?.status === 'failed') {\n      log('whatsapp_failed_status', { phoneNumberId, errorCodes: errorCodes(status.errors) });\n    }\n  }\n  if (Array.isArray(value.errors) && value.errors.length > 0) {\n    log('whatsapp_webhook_error', { phoneNumberId, errorCodes: errorCodes(value.errors) });\n  }\n  const contacts = Array.isArray(value.contacts) ? value.contacts : [];\n  return (Array.isArray(value.messages) ? value.messages : [])\n    .filter((message) => typeof message === 'object' && message !== null)\n    .map((message) => parseMessage(message, contacts, phoneNumberId))\n    .filter((message) => message !== null);\n}\n\nfunction parseEvents(json) {\n  if (!signatureMatches(json)) {\n    log('whatsapp_invalid_signature');\n    return [];\n  }\n  const body = json.body;\n  if (body?.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) {\n    log('whatsapp_unexpected_payload');\n    return [];\n  }\n  return body.entry\n    .flatMap((entry) => (Array.isArray(entry?.changes) ? entry.changes : []))\n    .flatMap(parseChange);\n}\n\nreturn $input.all().flatMap((item) => parseEvents(item.json).map((json) => ({ json })));"
+        "jsCode": "const BSUID = /^[A-Z]{2}\\.[A-Za-z0-9.]{1,150}$/;\nconst DIGITS = /^[0-9]{1,30}$/;\nconst MAX_ID_LENGTH = 200;\nconst MAX_TEXT_LENGTH = 4096;\nconst MAX_NAME_LENGTH = 100;\nconst IGNORED_TYPES = ['reaction', 'system', 'request_welcome'];\n\nfunction log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction signatureMatches(json) {\n  const header = json.headers?.['x-hub-signature-256'];\n  const computed = json.computedSignature;\n  if (typeof header !== 'string' || typeof computed !== 'string' || computed.length === 0) {\n    return false;\n  }\n  const expected = `sha256=${computed}`;\n  if (header.length !== expected.length) return false;\n  let difference = 0;\n  for (let index = 0; index < expected.length; index++) {\n    difference |= header.charCodeAt(index) ^ expected.charCodeAt(index);\n  }\n  return difference === 0;\n}\n\nfunction text(value, maxLength) {\n  return typeof value === 'string' && value.trim().length > 0 ? value.slice(0, maxLength) : null;\n}\n\nfunction matching(value, pattern) {\n  return typeof value === 'string' && pattern.test(value) ? value : null;\n}\n\nfunction isObject(value) {\n  return typeof value === 'object' && value !== null;\n}\n\nfunction list(value) {\n  return Array.isArray(value) ? value.filter(isObject) : [];\n}\n\nfunction errorCodes(errors) {\n  return (Array.isArray(errors) ? errors : []).map((error) => error?.code).filter(Number.isInteger);\n}\n\nfunction content(message) {\n  if (message.type === 'text') {\n    const body = text(message.text?.body, MAX_TEXT_LENGTH);\n    if (body !== null) return { type: 'text', text: body, replyId: null };\n  }\n  if (message.type === 'interactive') {\n    const reply = message.interactive?.button_reply ?? message.interactive?.list_reply;\n    const replyId = text(reply?.id, MAX_ID_LENGTH);\n    if (replyId !== null) return { type: 'reply', text: text(reply.title, MAX_TEXT_LENGTH), replyId };\n  }\n  return { type: 'unsupported', text: null, replyId: null };\n}\n\nfunction parseMessage(message, contacts, phoneNumberId) {\n  if (IGNORED_TYPES.includes(message.type)) return null;\n  const contact =\n    contacts.find((candidate) => typeof message.from_user_id === 'string' && candidate.user_id === message.from_user_id) ??\n    (contacts.length === 1 ? contacts[0] : undefined);\n  const messageId = text(message.id, MAX_ID_LENGTH);\n  const leadId = matching(message.from_user_id ?? contact?.user_id, BSUID);\n  if (messageId === null || leadId === null) {\n    log('whatsapp_invalid_message', { phoneNumberId });\n    return null;\n  }\n  const seconds = Number(message.timestamp);\n  return {\n    kind: 'message',\n    phoneNumberId,\n    messageId,\n    leadId,\n    phone: matching(message.from ?? contact?.wa_id, DIGITS),\n    name: text(contact?.profile?.name, MAX_NAME_LENGTH),\n    ...content(message),\n    receivedAt: new Date(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()).toISOString(),\n  };\n}\n\n// Mensagem que a equipe mandou pelo app (coexistência): pausa o lead. O BSUID pode não vir.\nfunction parseEcho(echo, phoneNumberId) {\n  const messageId = text(echo.id, MAX_ID_LENGTH);\n  const leadId = matching(echo.to_user_id, BSUID);\n  const phone = matching(echo.to, DIGITS);\n  if (messageId === null || (leadId === null && phone === null)) {\n    log('whatsapp_invalid_echo', { phoneNumberId });\n    return null;\n  }\n  return { kind: 'echo', phoneNumberId, messageId, leadId, phone };\n}\n\nfunction parseChange(change) {\n  // history, smb_app_state_sync e account_update são descartados (D013).\n  const field = change?.field;\n  if ((field !== 'messages' && field !== 'smb_message_echoes') || !isObject(change.value)) return [];\n  const value = change.value;\n  const phoneNumberId = matching(value.metadata?.phone_number_id, DIGITS);\n  if (phoneNumberId === null) {\n    log('whatsapp_invalid_payload');\n    return [];\n  }\n  if (field === 'smb_message_echoes') {\n    return list(value.message_echoes)\n      .map((echo) => parseEcho(echo, phoneNumberId))\n      .filter((echo) => echo !== null);\n  }\n  for (const status of list(value.statuses)) {\n    if (status.status === 'failed') {\n      log('whatsapp_failed_status', { phoneNumberId, errorCodes: errorCodes(status.errors) });\n    }\n  }\n  if (Array.isArray(value.errors) && value.errors.length > 0) {\n    log('whatsapp_webhook_error', { phoneNumberId, errorCodes: errorCodes(value.errors) });\n  }\n  const contacts = list(value.contacts);\n  return list(value.messages)\n    .map((message) => parseMessage(message, contacts, phoneNumberId))\n    .filter((message) => message !== null);\n}\n\nfunction parseEvents(json) {\n  if (!signatureMatches(json)) {\n    log('whatsapp_invalid_signature');\n    return [];\n  }\n  const body = json.body;\n  if (body?.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) {\n    log('whatsapp_unexpected_payload');\n    return [];\n  }\n  return body.entry.flatMap((entry) => list(entry?.changes)).flatMap(parseChange);\n}\n\nreturn $input.all().flatMap((item) => parseEvents(item.json).map((json) => ({ json })));"
       },
       "id": "e3b0c442-0009-4f19-9a19-000000000009",
       "name": "Parse events",
@@ -237,7 +237,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction buildEvent(result, message) {\n  if (Array.isArray(result.invalidConfigs) && result.invalidConfigs.length > 0) {\n    log('client_configs_invalid', { folders: result.invalidConfigs });\n  }\n  if (result.found !== true) {\n    log('whatsapp_unknown_client', { phoneNumberId: message.phoneNumberId, reason: result.reason ?? 'unknown' });\n    return [];\n  }\n  return [\n    {\n      event: {\n        clientId: result.config.id,\n        channel: 'whatsapp',\n        leadId: message.leadId,\n        phone: message.phone,\n        name: message.name,\n        messageIds: [message.messageId],\n        type: message.type,\n        text: message.text,\n        replyId: message.replyId,\n        receivedAt: message.receivedAt,\n      },\n      config: result.config,\n    },\n  ];\n}\n\nreturn $input.all().flatMap((item, index) =>\n  buildEvent(item.json, $('Is new message').itemMatching(index).json).map((json) => ({ json })),\n);"
+        "jsCode": "function log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction buildItem(result, parsed) {\n  if (Array.isArray(result.invalidConfigs) && result.invalidConfigs.length > 0) {\n    log('client_configs_invalid', { folders: result.invalidConfigs });\n  }\n  if (result.found !== true) {\n    log('whatsapp_unknown_client', { phoneNumberId: parsed.phoneNumberId, reason: result.reason ?? 'unknown' });\n    return [];\n  }\n  if (parsed.kind === 'echo') {\n    log('whatsapp_team_reply', { clientId: result.config.id });\n    return [{ kind: 'echo', clientId: result.config.id, leadKey: parsed.leadId ?? `tel:${parsed.phone}` }];\n  }\n  return [\n    {\n      kind: 'message',\n      event: {\n        clientId: result.config.id,\n        channel: 'whatsapp',\n        leadId: parsed.leadId,\n        phone: parsed.phone,\n        name: parsed.name,\n        messageIds: [parsed.messageId],\n        type: parsed.type,\n        text: parsed.text,\n        replyId: parsed.replyId,\n        receivedAt: parsed.receivedAt,\n      },\n      config: result.config,\n    },\n  ];\n}\n\nreturn $input.all().flatMap((item, index) =>\n  buildItem(item.json, $('Is new message').itemMatching(index).json).map((json) => ({ json })),\n);"
       },
       "id": "e3b0c442-0014-4f19-9a19-000000000014",
       "name": "Build event",
@@ -260,7 +260,7 @@
       "name": "Every day",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 600]
+      "position": [0, 800]
     },
     {
       "parameters": {
@@ -283,7 +283,7 @@
       "name": "Ensure message table (daily)",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [220, 500]
+      "position": [220, 700]
     },
     {
       "parameters": {
@@ -309,7 +309,610 @@
       "name": "Delete old message IDs",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [220, 700]
+      "position": [220, 850]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_lead_pauses",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadKey",
+              "type": "string"
+            },
+            {
+              "name": "pausedUntil",
+              "type": "date"
+            },
+            {
+              "name": "reason",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0001-4f20-9a20-000000000001",
+      "name": "Ensure pause table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [880, 0],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_message_buffer",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "messageId",
+              "type": "string"
+            },
+            {
+              "name": "type",
+              "type": "string"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "replyId",
+              "type": "string"
+            },
+            {
+              "name": "receivedAt",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0002-4f20-9a20-000000000002",
+      "name": "Ensure buffer table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1100, 0],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3b0c442-1003-4f20-9a20-000000001003",
+              "leftValue": "={{ $json.kind }}",
+              "rightValue": "echo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0003-4f20-9a20-000000000003",
+      "name": "Is echo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadKey",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadKey }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadKey": "={{ $json.leadKey }}",
+            "pausedUntil": "={{ $now.plus({ hours: 24 }).toISO() }}",
+            "reason": "team"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadKey",
+              "displayName": "leadKey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pausedUntil",
+              "displayName": "pausedUntil",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0004-4f20-9a20-000000000004",
+      "name": "Pause for team",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_message_buffer",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.event.clientId }}",
+            "leadId": "={{ $json.event.leadId }}",
+            "messageId": "={{ $json.event.messageIds[0] }}",
+            "type": "={{ $json.event.type }}",
+            "text": "={{ $json.event.text }}",
+            "replyId": "={{ $json.event.replyId }}",
+            "receivedAt": "={{ $json.event.receivedAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadId",
+              "displayName": "leadId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "messageId",
+              "displayName": "messageId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "replyId",
+              "displayName": "replyId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "receivedAt",
+              "displayName": "receivedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0005-4f20-9a20-000000000005",
+      "name": "Buffer message",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "id": "e3b0c442-0006-4f20-9a20-000000000006",
+      "name": "Wait for silence",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1760, 400],
+      "webhookId": "6c2f0d8e-3a41-4f20-9a20-b5e7c1d9a020"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma entrada por lead, com o maior ID que esta execução gravou na tabela de rajadas.\nconst leads = new Map();\nfor (const { json: row } of $input.all()) {\n  const key = `${row.clientId} ${row.leadId}`;\n  const current = leads.get(key);\n  if (current === undefined || row.id > current.ownMaxId) {\n    leads.set(key, { clientId: row.clientId, leadId: row.leadId, ownMaxId: row.id });\n  }\n}\nreturn [...leads.values()].map((json) => ({ json }));"
+      },
+      "id": "e3b0c442-0007-4f20-9a20-000000000007",
+      "name": "Latest per lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 400]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_message_buffer",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "e3b0c442-0008-4f20-9a20-000000000008",
+      "name": "Read burst",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [2200, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "pausedUntil",
+              "condition": "gt",
+              "keyValue": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "e3b0c442-0009-4f20-9a20-000000000009",
+      "name": "Read pause",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [2200, 500],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function log(event, details = {}) {\n  console.log(JSON.stringify({ event, ...details }));\n}\n\nfunction sameLead(item, lead) {\n  return item.clientId === lead.clientId && item.leadId === lead.leadId;\n}\n\n// Mídia vai para a equipe; resposta de botão ou lista vale a última.\nfunction burstType(rows) {\n  if (rows.some((row) => row.type === 'unsupported')) return 'unsupported';\n  if (rows.some((row) => row.type === 'reply')) return 'reply';\n  return 'text';\n}\n\nfunction groupedEvent(rows, latest) {\n  const type = burstType(rows);\n  const replies = rows.filter((row) => row.type === 'reply');\n  const texts = rows.map((row) => row.text).filter((value) => typeof value === 'string' && value.length > 0);\n  return {\n    ...latest,\n    messageIds: rows.map((row) => row.messageId),\n    type,\n    text: texts.length > 0 ? texts.join('\\n') : null,\n    replyId: type === 'reply' ? replies[replies.length - 1].replyId : null,\n    receivedAt: rows[rows.length - 1].receivedAt,\n  };\n}\n\nconst rows = $('Read burst')\n  .all()\n  .map((item) => item.json)\n  .filter((row) => Number.isInteger(row.id));\nconst pauses = $input\n  .all()\n  .map((item) => item.json)\n  .filter((pause) => typeof pause.leadKey === 'string');\nconst messages = $('Build event')\n  .all()\n  .map((item) => item.json)\n  .filter((item) => item.kind === 'message');\n\nreturn $('Latest per lead')\n  .all()\n  .flatMap(({ json: lead }) => {\n    const leadRows = rows.filter((row) => sameLead(row, lead)).sort((a, b) => a.id - b.id);\n    const latest = messages.filter((item) => sameLead(item.event, lead)).at(-1);\n    // Só a execução da mensagem mais recente responde; as anteriores param aqui.\n    if (latest === undefined || leadRows.at(-1)?.id !== lead.ownMaxId) return [];\n    const keys = [lead.leadId];\n    if (latest.event.phone !== null) keys.push(`tel:${latest.event.phone}`);\n    const paused = pauses.some((pause) => pause.clientId === lead.clientId && keys.includes(pause.leadKey));\n    if (paused) log('whatsapp_paused_lead', { clientId: lead.clientId });\n    return [\n      {\n        json: {\n          clientId: lead.clientId,\n          leadId: lead.leadId,\n          maxRowId: lead.ownMaxId,\n          paused,\n          event: groupedEvent(leadRows, latest.event),\n          config: latest.config,\n        },\n      },\n    ];\n  });"
+      },
+      "id": "e3b0c442-0010-4f20-9a20-000000000010",
+      "name": "Group burst",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 500]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_message_buffer",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadId }}"
+            },
+            {
+              "keyName": "id",
+              "condition": "lte",
+              "keyValue": "={{ $json.maxRowId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0011-4f20-9a20-000000000011",
+      "name": "Delete burst rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [2640, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3b0c442-1012-4f20-9a20-000000001012",
+              "leftValue": "={{ $json.paused }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0012-4f20-9a20-000000000012",
+      "name": "Is not paused",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2640, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({ json: { event: item.json.event, config: item.json.config } }));"
+      },
+      "id": "e3b0c442-0013-4f20-9a20-000000000013",
+      "name": "Burst event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 600]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_lead_pauses",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadKey",
+              "type": "string"
+            },
+            {
+              "name": "pausedUntil",
+              "type": "date"
+            },
+            {
+              "name": "reason",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0014-4f20-9a20-000000000014",
+      "name": "Ensure pause table (daily)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [440, 700]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_message_buffer",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "messageId",
+              "type": "string"
+            },
+            {
+              "name": "type",
+              "type": "string"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "replyId",
+              "type": "string"
+            },
+            {
+              "name": "receivedAt",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "e3b0c442-0015-4f20-9a20-000000000015",
+      "name": "Ensure buffer table (daily)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [660, 700]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pausedUntil",
+              "condition": "lt",
+              "keyValue": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0016-4f20-9a20-000000000016",
+      "name": "Delete expired pauses",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 950]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_message_buffer",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "createdAt",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus({ hours: 1 }).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3b0c442-0017-4f20-9a20-000000000017",
+      "name": "Delete stale buffer rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 1050]
     }
   ],
   "connections": {
@@ -444,6 +1047,166 @@
           },
           {
             "node": "Delete old message IDs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete expired pauses",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete stale buffer rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure message table": {
+      "main": [
+        [
+          {
+            "node": "Ensure pause table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure pause table": {
+      "main": [
+        [
+          {
+            "node": "Ensure buffer table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build event": {
+      "main": [
+        [
+          {
+            "node": "Is echo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is echo": {
+      "main": [
+        [
+          {
+            "node": "Pause for team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buffer message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buffer message": {
+      "main": [
+        [
+          {
+            "node": "Wait for silence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for silence": {
+      "main": [
+        [
+          {
+            "node": "Latest per lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Latest per lead": {
+      "main": [
+        [
+          {
+            "node": "Read burst",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read pause": {
+      "main": [
+        [
+          {
+            "node": "Group burst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group burst": {
+      "main": [
+        [
+          {
+            "node": "Delete burst rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is not paused",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is not paused": {
+      "main": [
+        [
+          {
+            "node": "Burst event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Ensure message table (daily)": {
+      "main": [
+        [
+          {
+            "node": "Ensure pause table (daily)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure pause table (daily)": {
+      "main": [
+        [
+          {
+            "node": "Ensure buffer table (daily)",
             "type": "main",
             "index": 0
           }
