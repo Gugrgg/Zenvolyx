@@ -1,8 +1,8 @@
 # CRM (contrato do conector)
 
 Contrato que os fluxos usam para gravar leads no CRM do cliente (D008, D011, D017). Os fluxos
-chamam o roteador em `router/`, que escolhe o fornecedor pelo `crm.provider` da config; cada
-fornecedor fica em `integrations/crm/<fornecedor>/` (T021).
+chamam o [roteador](router/README.md) (ID `crmUpsertRouter1`), que escolhe o fornecedor pelo
+`crm.provider` da config; cada fornecedor fica em `integrations/crm/<fornecedor>/` (T021).
 
 ## Entrada
 
@@ -47,8 +47,20 @@ Um item JSON por chamada ao roteador (valores fictícios):
 ## Saída
 
 - Sucesso: `{ "ok": true }`.
-- Falha: `{ "ok": false, "error": { "code": "...", "retryable": true } }`. Fornecedor desconhecido
-  devolve `code` `unknown_provider` e `retryable` `false`.
+- Falha: `{ "ok": false, "error": { "code": "...", "retryable": false } }`, com `retryable`
+  indicando se vale tentar de novo mais tarde. Códigos:
+
+| `code` | Quando | `retryable` |
+|--------|--------|-------------|
+| `invalid_input` | Entrada fora do contrato; `field` diz qual campo. Nada é gravado. | não |
+| `unknown_provider` | `crm.provider` sem conector. | não |
+| `no_provider` | Conector inexistente ou não publicado no n8n. | não |
+| `auth` | Credencial recusada pelo fornecedor. | não |
+| `forbidden` | Sem acesso ao recurso (ex.: planilha não compartilhada). | não |
+| `not_found` | Recurso inexistente (ex.: planilha ou aba). | não |
+| `provider_error` | Outra resposta do fornecedor. | não |
+| `rate_limited` | Limite de uso do fornecedor. | sim |
+| `unavailable` | Erro temporário do fornecedor ou de rede. | sim |
 
 ## Regras
 
@@ -56,8 +68,9 @@ Um item JSON por chamada ao roteador (valores fictícios):
   se não achar e houver telefone, procura pelo telefone e atualiza o `id` (o BSUID muda quando o
   lead troca de número); se não achar de novo, cria.
 - Os fluxos chamam no primeiro contato e a cada mudança de etapa, não a cada mensagem.
-- Erro temporário: o conector tenta de novo. Se ainda falhar, devolve falha; o fluxo alerta sem
-  dados pessoais e segue a conversa, e a próxima gravação leva o estado completo.
+- Erro temporário: o roteador tenta de novo uma vez, 2 s depois. Se ainda falhar, devolve falha; o
+  fluxo segue a conversa, com aviso sem dados pessoais (T027; até lá, só log), e a próxima gravação
+  leva o estado completo.
 - Grava só os campos acima, nunca o texto da conversa. Os dados no CRM são do cliente, que é o
   controlador na LGPD; a Zenvolyx apenas opera.
 - `stopped` fica no CRM para a equipe também não procurar o lead: o estado da conversa, onde o
@@ -80,6 +93,9 @@ Um item JSON por chamada ao roteador (valores fictícios):
   Pediu para parar. Respostas:
   uma linha por pergunta, no formato "pergunta: resposta". Agendamento como "dd/mm/aaaa hh:mm
   (serviço)". Datas no fuso do cliente (`timezone`).
+- As colunas A a I são da automação, reescritas a cada gravação em modo `RAW` (texto, nunca
+  fórmula); anotações da equipe vão da coluna J em diante. Conta de serviço, planilha e erros:
+  [google-sheets](google-sheets/README.md).
 
 ### Outros CRMs
 
@@ -89,5 +105,5 @@ nós do n8n não escolhem credencial durante a execução (D014), a forma é dec
 tarefa do conector, sem token na config nem nos dados da execução, que ficam salvos quando há
 erro (D013).
 
-Como testar: fixtures fictícias em `tests/fixtures/crm/` e roteiro de verificação no README de
-cada fornecedor (T021).
+Como testar: `npm test -- tests/crm-router.test.ts tests/crm-google-sheets.test.ts`, com as
+fixtures fictícias de `tests/fixtures/crm/`, e o roteiro no README de cada fornecedor.
