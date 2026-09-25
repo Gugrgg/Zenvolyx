@@ -69,7 +69,7 @@ Etapa 1, desenvolvimento e testes (custo só da IA):
 - n8n no computador (T012) e túnel ligado durante os testes.
 - App na Meta com o número de teste, e o seu celular cadastrado como destinatário de teste (T019).
 - Projeto no Google Cloud com a conta de serviço (Sheets e Calendar); planilha `Leads` e agenda de
-  demonstração da clínica compartilhadas com ela (T021, T022, T040).
+  demonstração da clínica compartilhadas com ela (T021, T022, T040; [passo a passo](../../integrations/crm/google-sheets/README.md#conta-de-serviço-do-google-dono-uma-vez)).
 - Conta na Anthropic com chave da API e limite de gasto ([ia.md](ia.md)).
 - Porta do WhatsApp da clínica criada à mão com o token da Zenvolyx
   ([passo a passo](../../integrations/whatsapp/client-gateway/README.md)).

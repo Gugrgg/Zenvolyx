@@ -1,0 +1,204 @@
+{
+  "id": "crmGoogleSheets1",
+  "name": "CRM Google Sheets connector",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d8b2f021-0001-4f21-9a21-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';\nconst RANGE = 'Leads!A:I';\nconst STAGES = {\n  talking: 'Em conversa',\n  qualified: 'Qualificado',\n  not_qualified: 'Não qualificado',\n  scheduled: 'Agendado',\n  with_team: 'Com a equipe',\n  urgent: 'Urgência',\n  stopped: 'Pediu para parar',\n};\nconst CHANNELS = { whatsapp: 'WhatsApp' };\n\n// \"dd/mm/aaaa hh:mm\" no fuso do cliente.\nfunction localDateTime(iso, timeZone) {\n  const parts = Object.fromEntries(\n    new Intl.DateTimeFormat('pt-BR', {\n      timeZone,\n      day: '2-digit',\n      month: '2-digit',\n      year: 'numeric',\n      hour: '2-digit',\n      minute: '2-digit',\n      hourCycle: 'h23',\n    })\n      .formatToParts(new Date(iso))\n      .map((part) => [part.type, part.value]),\n  );\n  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;\n}\n\nfunction prepare(input) {\n  const { lead, timezone } = input;\n  const spreadsheetId = input.crm.settings.spreadsheetId;\n  const appointment = lead.appointment;\n  const service = appointment?.service ? ` (${appointment.service})` : '';\n  return {\n    spreadsheetId,\n    readUrl: `${SHEETS_API}${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(RANGE)}`,\n    leadId: lead.id,\n    phone: lead.phone,\n    row: [\n      lead.name ?? '',\n      lead.phone ?? '',\n      STAGES[lead.stage] ?? lead.stage,\n      lead.answers.map((item) => `${item.question}: ${item.answer}`).join('\\n'),\n      appointment ? `${localDateTime(appointment.start, timezone)}${service}` : '',\n      CHANNELS[lead.channel] ?? lead.channel,\n      localDateTime(lead.firstContactAt, timezone),\n      localDateTime(lead.lastContactAt, timezone),\n      lead.id,\n    ],\n  };\n}\n\nreturn $input.all().map((item) => ({ json: prepare(item.json) }));"
+      },
+      "id": "d8b2f021-0002-4f21-9a21-000000000002",
+      "name": "Prepare row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.readUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "d8b2f021-0003-4f21-9a21-000000000003",
+      "name": "Read sheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';\nconst HEADER = ['Nome', 'Telefone', 'Etapa', 'Respostas', 'Agendamento', 'Canal', 'Primeiro contato', 'Último contato', 'ID do lead'];\nconst PHONE_COLUMN = 1;\nconst ID_COLUMN = 8;\n\nfunction succeeded(response) {\n  return response.error === undefined && response.statusCode >= 200 && response.statusCode < 300;\n}\n\nfunction cell(row, column) {\n  return String(Array.isArray(row) ? (row[column] ?? '') : '').trim();\n}\n\nfunction findRow(rows, start, column, value) {\n  for (let index = start; index < rows.length; index++) {\n    if (cell(rows[index], column) === value) return index;\n  }\n  return -1;\n}\n\nfunction valuesUrl(prepared) {\n  return `${SHEETS_API}${encodeURIComponent(prepared.spreadsheetId)}/values/`;\n}\n\nfunction append(prepared, values) {\n  return {\n    write: true,\n    method: 'POST',\n    url: `${valuesUrl(prepared)}${encodeURIComponent('Leads!A:I')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,\n    body: { majorDimension: 'ROWS', values },\n  };\n}\n\nfunction update(prepared, index) {\n  const range = `Leads!A${index + 1}:I${index + 1}`;\n  return {\n    write: true,\n    method: 'PUT',\n    url: `${valuesUrl(prepared)}${encodeURIComponent(range)}?valueInputOption=RAW`,\n    body: { range, majorDimension: 'ROWS', values: [prepared.row] },\n  };\n}\n\n// Procura pelo ID do lead; sem ele, pelo telefone (o BSUID muda quando o lead troca de número).\nfunction plan(response, prepared) {\n  if (!succeeded(response)) return { write: false, response };\n  const rows = Array.isArray(response.body?.values) ? response.body.values : [];\n  if (rows.length === 0) return append(prepared, [HEADER, prepared.row]);\n  const start = HEADER.every((value, column) => cell(rows[0], column) === value) ? 1 : 0;\n  let index = findRow(rows, start, ID_COLUMN, prepared.leadId);\n  if (index === -1 && prepared.phone !== null) index = findRow(rows, start, PHONE_COLUMN, prepared.phone);\n  return index === -1 ? append(prepared, [prepared.row]) : update(prepared, index);\n}\n\nreturn $input.all().map((item, index) => ({\n  json: plan(item.json, $('Prepare row').itemMatching(index).json),\n}));"
+      },
+      "id": "d8b2f021-0004-4f21-9a21-000000000004",
+      "name": "Plan write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d8b2f021-0105-4f21-9a21-000000000105",
+              "leftValue": "={{ $json.write }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d8b2f021-0005-4f21-9a21-000000000005",
+      "name": "Should write",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "d8b2f021-0006-4f21-9a21-000000000006",
+      "name": "Write row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -100],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable) {\n  return { ok: false, error: { code, retryable } };\n}\n\nfunction outcome(response) {\n  if (response.error !== undefined) {\n    // Falha antes da resposta: credencial recusada pelo Google ou problema de rede.\n    const message = typeof response.error === 'string' ? response.error : JSON.stringify(response.error ?? '');\n    return /invalid_grant|invalid_client|unauthorized_client|invalid_scope|private key|privateKey|asymmetric|PEM|JWT/i.test(message)\n      ? failure('auth', false)\n      : failure('unavailable', true);\n  }\n  const status = response.statusCode;\n  const message = String(response.body?.error?.message ?? '');\n  if (status >= 200 && status < 300) return { ok: true };\n  if (status === 401) return failure('auth', false);\n  if (status === 403) return failure('forbidden', false);\n  if (status === 404 || (status === 400 && /Unable to parse range/i.test(message))) return failure('not_found', false);\n  if (status === 429) return failure('rate_limited', true);\n  if (status >= 500) return failure('unavailable', true);\n  return failure('provider_error', false);\n}\n\nreturn $input.all().map((item) => ({\n  json: outcome(item.json.write === false ? item.json.response : item.json),\n}));"
+      },
+      "id": "d8b2f021-0007-4f21-9a21-000000000007",
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare row": {
+      "main": [
+        [
+          {
+            "node": "Read sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read sheet": {
+      "main": [
+        [
+          {
+            "node": "Plan write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan write": {
+      "main": [
+        [
+          {
+            "node": "Should write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should write": {
+      "main": [
+        [
+          {
+            "node": "Write row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write row": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}
