@@ -11,7 +11,7 @@ saída do tipo fica em `integrations/<tipo>/README.md`. Diferenças de clientes 
   [Google Sheets](crm/google-sheets/README.md) (T021).
 - Agenda: [contrato](calendar/README.md), [roteador](calendar/router/README.md) e
   [Google Calendar](calendar/google-calendar/README.md) (T022).
-- IA: [contrato](ai/README.md); conector na T024.
+- IA: [contrato](ai/README.md) e [conector Anthropic](ai/anthropic/README.md) (T024).
 
 Como rodar: seguir o README de cada conector quando ele for criado, importando o
 JSON no n8n local. Conector em TypeScript é exceção (D011) e segue a stack D009,

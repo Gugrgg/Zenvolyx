@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T024 Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
-  Depende: T011, T012 | Sugerido: CODEX | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
 - [ ] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
   Depende: T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
 - [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
@@ -72,6 +70,8 @@ ou o mínimo que a B012 definir).
   Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
 - [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas); até lá, limpar o export à mão
   Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
+- [ ] T045 Conferir e corrigir o procedimento de publicação por CLI no n8n 2.40.5: validar a versão realmente executada depois de reimportar e publicar
+  Sugerido: CODEX | Ref: integrations/ai/anthropic/README.md (Credencial e publicação)
 
 ## Fase comercial: primeiro cliente
 
@@ -113,7 +113,10 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-_(vazio)_
+- [ ] T024 [CODEX] Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
+  Depende: T011, T012 | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
+  Implementação pronta e importada como rascunho no n8n local; 423 testes (72 do conector), lint, tipos e validadores passaram. 14 cenários passaram no n8n com API simulada, em instância descartável; execução final da CLI com publicação em modo de compatibilidade (`N8N_USE_WORKFLOW_PUBLICATION_SERVICE=false`), sem alterar o ambiente local principal (T045).
+  Pendente: o dono cadastrar a credencial `Anthropic Zenvolyx` no n8n; depois publicar pelo editor e conferir com a API real os cenários 3, 7, 8, 9 e 11. Nenhuma chamada paga foi feita. Não marcar concluída antes dessa conferência.
 
 ## Concluído
 
@@ -307,20 +310,21 @@ Observações:
 - Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
 - Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
-### Handoff T011
-Concluído:
-- IA na conversa em docs/arquitetura/ia.md; contrato em integrations/ai/README.md; D019
-- config com a seção `ai` (`enabled` e `knowledge`)
+### Handoff T024 (validação real pendente)
+Implementado e testado com API simulada:
+- `aiAnthropic00001`: valida entrada, envia somente business/question/message, exige saída estruturada e confere a resposta; uma nova tentativa para falhas transitórias.
+- Modelo `claude-opus-5-5`, esforço `low`, até 2.000 tokens; cache de 5 minutos no último bloco fixo. Instruções de saúde e ordem `urgent`, `stop`, `human`, `answer`, `question`, `other`.
+- Em `urgent` e `stop`, answer/reply são descartados; métricas sem conteúdo da conversa. O workflow desliga persistência de execuções, inclusive com erro.
 Arquivos principais:
-- docs/arquitetura/ia.md
-- integrations/ai/README.md
-Próxima tarefa: T024
+- integrations/ai/anthropic/config.ts; instructions.md; workflow.json; README.md
+- tests/ai-anthropic.test.ts; tests/fixtures/ai/input.json; tests/fixtures/ai/demo-cases.json
+Próxima tarefa: concluir T024 com a credencial do dono, antes da T028
 Observações:
-- T024: `POST https://api.anthropic.com/v1/messages` pelo nó HTTP Request, com a credencial da Anthropic no n8n; `model` `claude-opus-5-5`; `output_config` com `effort: "low"` e `format: { "type": "json_schema", "schema": ... }` (esquema fixo, com `additionalProperties: false`); `max_tokens` com folga (ex.: 2000). Instruções e base em `system`, com `cache_control` no último bloco fixo; pergunta e mensagem na mensagem do usuário.
-- T024: o Opus 5.5 não aceita desligar o raciocínio nem `tool_choice` forçado (usar a saída estruturada). Conferir `stop_reason` antes de ler a resposta: `refusal` e `max_tokens` viram falha. O esquema da API não limita tamanho nem valores: validar `answer` contra as opções e `reply` até 400 caracteres no conector.
-- T024: instruções num arquivo do repositório (ex.: `integrations/ai/anthropic/instructions.md`), usado pelo sub-workflow e pela avaliação; um teste confere que o JSON exportado usa o mesmo texto e o mesmo modelo.
-- T024: intenção `urgent`, a primeira da ordem, e as regras de saúde de docs/arquitetura/ia.md nas instruções (D026). Com `urgent`, o fluxo ignora `reply`. Conferir à mão, com a IA de verdade, os casos 3, 7, 8, 9 e 11 de docs/arquitetura/demo-cenarios.md e anotar o resultado na validação.
-- T025 (depois da demo): casos em `tests/fixtures/ai/`: escolha por texto livre, dúvida respondida pela base, dúvida fora da base, pedido de atendente, "parar", urgência de saúde e tentativa de mudar as instruções. Script com o SDK oficial `@anthropic-ai/sdk` (dependência justificada no commit), `ANTHROPIC_API_KEY` no `.env` (nome no `.env.example`) e relatório com acertos e custo da rodada; roda só quando pedido.
+- Credencial ausente em 2026-09-28: workflow local importado sem publicar; selecionar `Anthropic Zenvolyx` (tipo `anthropicApi`) nos dois nós HTTP, salvar e publicar pelo editor. A chave não deve ir ao chat ou ao Git.
+- Cenários reais 3, 7, 8, 9 e 11: todos pendentes, por falta de credencial. A fixture traz base fictícia só para o ensaio; não substitui a T038. Passos e critérios no README do conector. Testes simulados não demonstram a qualidade clínica/administrativa das respostas reais.
+- Os 14 cenários no n8n cobriram resposta, pensamento antes do JSON, urgência/parada sem texto gerado, urgência com texto descartável longo, recusa, truncamento, opção inexistente, resposta longa/malformada, autenticação, 429, 503 e entrada inválida. O modo de compatibilidade de publicação foi usado somente na instância descartável de teste; a T045 trata o problema de CLI.
+- T028: tratar a intenção antes de gravar answer ou enviar reply; urgent envia `messages.urgent` fixo, CRM urgent e pausa. Sem IA, manter botões; falhas seguem o fallback de D019. O workflow pai também deve impedir gravação de conteúdo pessoal em execuções/logs.
+- T025: reutilizar `config.ts`, `instructions.md` e fixtures; SDK oficial `@anthropic-ai/sdk`, dependência justificada, `ANTHROPIC_API_KEY` no `.env` e nome no `.env.example`. Avaliação com acertos/custo, fora de `npm test`, executada só quando pedida.
 
 ### Handoff T009
 Concluído:

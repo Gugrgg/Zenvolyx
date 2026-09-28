@@ -1,7 +1,8 @@
 # IA (contrato do conector)
 
 Contrato que os fluxos usam para interpretar mensagens de leads com IA (D011, D019). A
-implementação fica em `anthropic/` (T024). Abordagem completa:
+implementação fica em [anthropic/](anthropic/README.md), sub-workflow `aiAnthropic00001`
+(T024). Abordagem completa:
 [docs/arquitetura/ia.md](../../docs/arquitetura/ia.md).
 
 ## interpret
@@ -42,7 +43,9 @@ Saída: `{ "ok": true, "intent": "answer", "answer": "cleaning", "reply": "Ficam
 
 Falha: `{ "ok": false, "error": { "code": "...", "retryable": false } }`. Códigos: `invalid_output`
 (fora do esquema, `answer` fora das opções ou `reply` longo demais), `refusal` (a IA recusou) e
-`unavailable` (erro temporário da API, com `retryable` `true` depois das novas tentativas).
+`unavailable` (erro temporário da API, com `retryable` `true` depois de uma nova tentativa).
+Também: `invalid_input` (campo de entrada inválido, com `field`), `auth` (credencial
+ausente/recusada) e `provider_error` (configuração/requisição recusada), sem nova tentativa.
 
 ## Regras
 
@@ -60,6 +63,7 @@ Falha: `{ "ok": false, "error": { "code": "...", "retryable": false } }`. Códig
 - Modelo, esforço e instruções ficam num só lugar do repositório, usado pelo sub-workflow e pela
   avaliação (T025).
 
-Como testar: casos fictícios em `tests/fixtures/ai/` e a avaliação da T025, que chama a IA de
+Como testar: `npm test -- tests/ai-anthropic.test.ts`, casos fictícios em `tests/fixtures/ai/`
+e o [roteiro do conector](anthropic/README.md#testar). A avaliação da T025 chama a IA de
 verdade (com custo) e por isso fica fora do `npm test`. Até a demo, os casos de saúde dos
 [cenários da demo](../../docs/arquitetura/demo-cenarios.md) são conferidos à mão (T024, T030).

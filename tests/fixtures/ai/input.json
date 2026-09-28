@@ -1,0 +1,29 @@
+{
+  "action": "interpret",
+  "clientId": "clinica-ficticia",
+  "business": {
+    "name": "Clínica Fictícia",
+    "knowledge": [
+      { "topic": "Endereço", "text": "Rua Exemplo, 100, Cidade Fictícia." },
+      {
+        "topic": "Avaliação e valores",
+        "text": "Na avaliação, o dentista define o plano de tratamento. O valor depende desse plano e é informado na avaliação."
+      },
+      {
+        "topic": "Serviços",
+        "text": "A clínica oferece avaliação, limpeza e implantes. O profissional indica a técnica na avaliação."
+      }
+    ]
+  },
+  "question": {
+    "id": "service",
+    "text": "Qual atendimento você procura?",
+    "type": "choice",
+    "options": [
+      { "id": "evaluation", "label": "Avaliação" },
+      { "id": "cleaning", "label": "Limpeza" },
+      { "id": "implant", "label": "Implante" }
+    ]
+  },
+  "message": "Quero fazer uma limpeza. Vocês ficam onde?"
+}
