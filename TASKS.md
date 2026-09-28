@@ -117,6 +117,7 @@ podem começar antes de a demo ficar pronta.
   Depende: T011, T012 | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
   Implementação pronta e importada como rascunho no n8n local; 423 testes (72 do conector), lint, tipos e validadores passaram. 14 cenários passaram no n8n com API simulada, em instância descartável; execução final da CLI com publicação em modo de compatibilidade (`N8N_USE_WORKFLOW_PUBLICATION_SERVICE=false`), sem alterar o ambiente local principal (T045).
   Pendente: o dono cadastrar a credencial `Anthropic Zenvolyx` no n8n; depois publicar pelo editor e conferir com a API real os cenários 3, 7, 8, 9 e 11. Nenhuma chamada paga foi feita. Não marcar concluída antes dessa conferência.
+  Pausada por decisão do dono em 2026-09-28: não gastar com API agora. Não comprar créditos, configurar cobrança nem executar chamadas pagas até nova autorização explícita. A implementação permanece pronta; a validação real e a conclusão da T024 ficam adiadas.
 
 ## Concluído
 
@@ -320,6 +321,7 @@ Arquivos principais:
 - tests/ai-anthropic.test.ts; tests/fixtures/ai/input.json; tests/fixtures/ai/demo-cases.json
 Próxima tarefa: concluir T024 com a credencial do dono, antes da T028
 Observações:
+- Em 2026-09-28, o dono adiou gastos com API. Não solicitar novamente a chave nem executar chamadas pagas até ele autorizar a retomada. Manter T024 pendente; testes simulados não substituem a validação real.
 - Credencial ausente em 2026-09-28: workflow local importado sem publicar; selecionar `Anthropic Zenvolyx` (tipo `anthropicApi`) nos dois nós HTTP, salvar e publicar pelo editor. A chave não deve ir ao chat ou ao Git.
 - Cenários reais 3, 7, 8, 9 e 11: todos pendentes, por falta de credencial. A fixture traz base fictícia só para o ensaio; não substitui a T038. Passos e critérios no README do conector. Testes simulados não demonstram a qualidade clínica/administrativa das respostas reais.
 - Os 14 cenários no n8n cobriram resposta, pensamento antes do JSON, urgência/parada sem texto gerado, urgência com texto descartável longo, recusa, truncamento, opção inexistente, resposta longa/malformada, autenticação, 429, 503 e entrada inválida. O modo de compatibilidade de publicação foi usado somente na instância descartável de teste; a T045 trata o problema de CLI.
