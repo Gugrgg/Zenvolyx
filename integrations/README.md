@@ -9,7 +9,8 @@ saída do tipo fica em `integrations/<tipo>/README.md`. Diferenças de clientes 
   (T018) e [porta do cliente](whatsapp/client-gateway/README.md) (T033).
 - CRM: [contrato](crm/README.md), [roteador](crm/router/README.md) e
   [Google Sheets](crm/google-sheets/README.md) (T021).
-- Agenda: [contrato](calendar/README.md); conectores na T022.
+- Agenda: [contrato](calendar/README.md), [roteador](calendar/router/README.md) e
+  [Google Calendar](calendar/google-calendar/README.md) (T022).
 - IA: [contrato](ai/README.md); conector na T024.
 
 Como rodar: seguir o README de cada conector quando ele for criado, importando o

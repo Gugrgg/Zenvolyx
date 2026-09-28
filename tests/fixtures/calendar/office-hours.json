@@ -1,0 +1,25 @@
+{
+  "request": {
+    "action": "listSlots",
+    "clientId": "clinica-exemplo",
+    "timezone": "America/Sao_Paulo",
+    "calendar": {
+      "provider": "google-calendar",
+      "settings": {
+        "calendarId": "agenda-ficticia@example.invalid"
+      }
+    },
+    "scheduling": {
+      "durationMinutes": 60,
+      "minNoticeHours": 2,
+      "daysAhead": 2,
+      "hours": {
+        "mon": ["09:00-12:00", "14:00-18:00"],
+        "tue": ["09:00-12:00"]
+      }
+    },
+    "limit": 10
+  },
+  "now": "2026-09-28T10:00:00.000Z",
+  "busy": []
+}

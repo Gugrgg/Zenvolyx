@@ -1,0 +1,581 @@
+{
+  "id": "googleCalendar01",
+  "name": "Google Calendar connector",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "b0220022-0000-4022-8022-000000000000",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable = false, field) {\n  return {ok:false,error:{code,retryable,...(field ? {field} : {})}};\n}\n\nfunction object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }\n\nfunction text(value, max=200) { return typeof value==='string' && value.trim().length>0 && value.length<=max; }\n\nfunction iso(value) {\n  return typeof value==='string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$/.test(value) &&\n    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,19)===value.slice(0,19);\n}\n\nfunction timeZone(value) {\n  if (!text(value,100) || /^[+-]/.test(value)) return false;\n  try { new Intl.DateTimeFormat('en',{timeZone:value}); return true; } catch { return false; }\n}\n\nfunction invalidScheduling(s) {\n  if (!object(s)) return 'scheduling';\n  if (!Number.isInteger(s.durationMinutes) || s.durationMinutes<1 || s.durationMinutes>1440) return 'scheduling.durationMinutes';\n  if (!Number.isFinite(s.minNoticeHours) || s.minNoticeHours<0 || s.minNoticeHours>8784) return 'scheduling.minNoticeHours';\n  if (!Number.isInteger(s.daysAhead) || s.daysAhead<1 || s.daysAhead>366) return 'scheduling.daysAhead';\n  if (!object(s.hours)) return 'scheduling.hours';\n  for (const [day,ranges] of Object.entries(s.hours)) {\n    if (!['mon','tue','wed','thu','fri','sat','sun'].includes(day) || !Array.isArray(ranges) || ranges.length>24) return 'scheduling.hours';\n    let previous='00:00';\n    for (const range of ranges) {\n      if (typeof range!=='string' || !/^(?:[01]\\d|2[0-3]):[0-5]\\d-(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(range)) return 'scheduling.hours';\n      const [start,end]=range.split('-');\n      if (start>=end || start<previous) return 'scheduling.hours';\n      previous=end;\n    }\n  }\n  return null;\n}\n\nfunction route(input) {\n  function reject(field) { return {valid:false,result:failure('invalid_input',false,field)}; }\n  if (!object(input)) return reject('input');\n  if (!['listSlots','book'].includes(input.action)) return reject('action');\n  if (!text(input.clientId,100) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.clientId)) return reject('clientId');\n  if (!timeZone(input.timezone)) return reject('timezone');\n  if (!object(input.calendar) || !text(input.calendar.provider,50) || !object(input.calendar.settings)) return reject('calendar');\n  if (input.calendar.provider!=='google-calendar') return {valid:false,result:failure('unknown_provider')};\n  const calendarId=input.calendar.settings.calendarId;\n  if (!text(calendarId,1024) || /\\s|[\\x00-\\x1f]/.test(calendarId) || /PREENCHER/i.test(calendarId)) return reject('calendar.settings.calendarId');\n  const now=new Date().toISOString();\n  const request={action:input.action,clientId:input.clientId,timezone:input.timezone,calendar:{provider:'google-calendar',settings:{calendarId}}};\n  if (input.action==='listSlots') {\n    const bad=invalidScheduling(input.scheduling);\n    if (bad) return reject(bad);\n    if (!Number.isInteger(input.limit) || input.limit<1 || input.limit>10) return reject('limit');\n    request.scheduling={durationMinutes:input.scheduling.durationMinutes,minNoticeHours:input.scheduling.minNoticeHours,daysAhead:input.scheduling.daysAhead,hours:input.scheduling.hours};\n    request.limit=input.limit;\n    request.window={now,timeMin:now,timeMax:new Date(Date.parse(now)+input.scheduling.daysAhead*86400000).toISOString()};\n  } else {\n    if (!object(input.slot) || !iso(input.slot.start) || !iso(input.slot.end) || Date.parse(input.slot.start)<=Date.parse(now) || Date.parse(input.slot.end)<=Date.parse(input.slot.start) || Date.parse(input.slot.end)-Date.parse(input.slot.start)>86400000) return reject('slot');\n    if (!object(input.lead) || !text(input.lead.id,200)) return reject('lead.id');\n    if (input.lead.name!==null && !text(input.lead.name,200)) return reject('lead.name');\n    if (input.lead.phone!==null && !(typeof input.lead.phone==='string' && /^[0-9]{1,30}$/.test(input.lead.phone))) return reject('lead.phone');\n    if (input.service!=null && !text(input.service,100)) return reject('service');\n    request.slot={start:new Date(input.slot.start).toISOString(),end:new Date(input.slot.end).toISOString()};\n    request.lead={id:input.lead.id,name:input.lead.name,phone:input.lead.phone};\n    request.service=input.service??null;\n    request.window={now,timeMin:request.slot.start,timeMax:request.slot.end};\n  }\n  return {...request,valid:true,providerWorkflowId:'googleCalendar01'};\n}\nreturn $input.all().map(item=>({json:route(item.json)}));"
+      },
+      "id": "a0220022-0000-4022-8022-000000000009",
+      "name": "Validate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0220022-0000-4022-8022-000000000010",
+      "name": "Is valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ JSON.stringify([$json.clientId, $json.calendar.settings.calendarId, $json.lead?.id ?? null, $json.slot?.start ?? null, $json.slot?.end ?? null]) }}",
+        "dataPropertyName": "eventId",
+        "encoding": "hex"
+      },
+      "id": "a0220022-0000-4022-8022-000000000011",
+      "name": "Event identity",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "function eventPlan(request) {\n const calendarId=request.calendar.settings.calendarId;\n const base=`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;\n return {...request,isBook:request.action==='book',eventUrl:`${base}/${request.eventId}`,insertUrl:base,\n  freeBusyBody:{timeMin:request.window.timeMin,timeMax:request.window.timeMax,timeZone:'UTC',items:[{id:calendarId}]},\n  ...(request.action==='book'?{eventBody:{id:request.eventId,summary:`${request.service??'Atendimento'} – ${request.lead.name??'Lead do WhatsApp'}`,description:[request.lead.phone?`Telefone: ${request.lead.phone}`:null,'Agendado pelo WhatsApp (Zenvolyx)'].filter(Boolean).join('\\n'),start:{dateTime:request.slot.start,timeZone:request.timezone},end:{dateTime:request.slot.end,timeZone:request.timezone},extendedProperties:{private:{leadId:request.lead.id,clientId:request.clientId,zenvolyx:'true'}}}}:{}),\n };\n}\nreturn $input.all().map(item=>({json:eventPlan(item.json)}));"
+      },
+      "id": "a0220022-0000-4022-8022-000000000012",
+      "name": "Prepare request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.isBook }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0220022-0000-4022-8022-000000000013",
+      "name": "Is booking",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.eventUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "a0220022-0000-4022-8022-000000000014",
+      "name": "Find existing event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable = false, field) {\n  return {ok:false,error:{code,retryable,...(field ? {field} : {})}};\n}\n\nfunction object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }\n\nfunction httpFailure(response) {\n if(response.error!==undefined) {\n   const message=typeof response.error==='string'?response.error:JSON.stringify(response.error??'');\n   return /invalid_grant|invalid_client|unauthorized_client|invalid_scope|private key|privateKey|asymmetric|PEM|JWT/i.test(message)?failure('auth'):failure('unavailable',true);\n }\n const status=response.statusCode;\n if(status>=200&&status<300)return null;\n if(status===401)return failure('auth');\n const reasons=response.body?.error?.errors?.map(e=>e.reason)??[];\n if(status===429||(status===403&&reasons.some(r=>['rateLimitExceeded','userRateLimitExceeded'].includes(r))))return failure('rate_limited',true);\n if(status===403)return failure('forbidden');\n if(status===404||status===410)return failure('not_found');\n if(status>=500)return failure('unavailable',true);\n return failure('provider_error');\n}\n\nfunction existingEvent(response,request) {\n const error=httpFailure(response);\n if(error)return error;\n const event=response.body;\n const metadata=event?.extendedProperties?.private;\n if(event?.id!==request.eventId || event.status==='cancelled' || metadata?.zenvolyx!=='true' || metadata?.clientId!==request.clientId || metadata?.leadId!==request.lead.id || Date.parse(event.start?.dateTime)!==Date.parse(request.slot.start)||Date.parse(event.end?.dateTime)!==Date.parse(request.slot.end))return failure('event_conflict');\n return {ok:true,eventId:event.id};\n}\nreturn $input.all().map((item,index)=>{\n const request=$('Prepare request').itemMatching(index).json;\n if(item.json.error===undefined && item.json.statusCode===404)return {json:{...request,queryBusy:true}};\n return {json:{queryBusy:false,result:existingEvent(item.json,request)}};\n});"
+      },
+      "id": "a0220022-0000-4022-8022-000000000015",
+      "name": "Existing result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.queryBusy }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0220022-0000-4022-8022-000000000016",
+      "name": "Query busy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1760, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/freeBusy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.freeBusyBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "a0220022-0000-4022-8022-000000000017",
+      "name": "Read busy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable = false, field) {\n  return {ok:false,error:{code,retryable,...(field ? {field} : {})}};\n}\n\nfunction object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }\n\nfunction httpFailure(response) {\n if(response.error!==undefined) {\n   const message=typeof response.error==='string'?response.error:JSON.stringify(response.error??'');\n   return /invalid_grant|invalid_client|unauthorized_client|invalid_scope|private key|privateKey|asymmetric|PEM|JWT/i.test(message)?failure('auth'):failure('unavailable',true);\n }\n const status=response.statusCode;\n if(status>=200&&status<300)return null;\n if(status===401)return failure('auth');\n const reasons=response.body?.error?.errors?.map(e=>e.reason)??[];\n if(status===429||(status===403&&reasons.some(r=>['rateLimitExceeded','userRateLimitExceeded'].includes(r))))return failure('rate_limited',true);\n if(status===403)return failure('forbidden');\n if(status===404||status===410)return failure('not_found');\n if(status>=500)return failure('unavailable',true);\n return failure('provider_error');\n}\n\nfunction busyResult(response,request) {\n const error=httpFailure(response);\n if(error)return {create:false,result:error};\n const calendarId=request.calendar.settings.calendarId;\n const calendars=response.body?.calendars;\n if(!calendars||!Object.hasOwn(calendars,calendarId))return {create:false,result:failure('provider_error')};\n const calendar=calendars[calendarId];\n if(Array.isArray(calendar?.errors)&&calendar.errors.length) {\n   const reasons=calendar.errors.map(e=>e.reason);\n   const result=reasons.includes('notFound')?failure('not_found'):reasons.includes('internalError')?failure('unavailable',true):reasons.includes('forbidden')?failure('forbidden'):failure('provider_error');\n   return {create:false,result};\n }\n if(!Array.isArray(calendar?.busy)||!calendar.busy.every(range=>object(range)&&typeof range.start==='string'&&typeof range.end==='string'&&/T.*(?:Z|[+-]\\d{2}:\\d{2})$/.test(range.start)&&/T.*(?:Z|[+-]\\d{2}:\\d{2})$/.test(range.end)&&Number.isFinite(Date.parse(range.start))&&Date.parse(range.end)>Date.parse(range.start))) return {create:false,result:failure('provider_error')};\n const busy=calendar.busy.map(({start,end})=>({start,end}));\n if(request.action==='listSlots') return {create:false,result:{ok:true,busy,now:request.window.now}};\n if(busy.some(range=>Date.parse(range.start)<Date.parse(request.slot.end)&&Date.parse(range.end)>Date.parse(request.slot.start)))return {create:false,result:failure('slot_taken')};\n return {...request,create:true};\n}\nreturn $input.all().map((item,index)=>({json:busyResult(item.json,$('Prepare request').itemMatching(index).json)}));"
+      },
+      "id": "a0220022-0000-4022-8022-000000000018",
+      "name": "Check availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.create }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0220022-0000-4022-8022-000000000019",
+      "name": "Create event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2420, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.insertUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.eventBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "a0220022-0000-4022-8022-000000000020",
+      "name": "Insert event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, -200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable = false, field) {\n  return {ok:false,error:{code,retryable,...(field ? {field} : {})}};\n}\n\nfunction object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }\n\nfunction httpFailure(response) {\n if(response.error!==undefined) {\n   const message=typeof response.error==='string'?response.error:JSON.stringify(response.error??'');\n   return /invalid_grant|invalid_client|unauthorized_client|invalid_scope|private key|privateKey|asymmetric|PEM|JWT/i.test(message)?failure('auth'):failure('unavailable',true);\n }\n const status=response.statusCode;\n if(status>=200&&status<300)return null;\n if(status===401)return failure('auth');\n const reasons=response.body?.error?.errors?.map(e=>e.reason)??[];\n if(status===429||(status===403&&reasons.some(r=>['rateLimitExceeded','userRateLimitExceeded'].includes(r))))return failure('rate_limited',true);\n if(status===403)return failure('forbidden');\n if(status===404||status===410)return failure('not_found');\n if(status>=500)return failure('unavailable',true);\n return failure('provider_error');\n}\n\nfunction existingEvent(response,request) {\n const error=httpFailure(response);\n if(error)return error;\n const event=response.body;\n const metadata=event?.extendedProperties?.private;\n if(event?.id!==request.eventId || event.status==='cancelled' || metadata?.zenvolyx!=='true' || metadata?.clientId!==request.clientId || metadata?.leadId!==request.lead.id || Date.parse(event.start?.dateTime)!==Date.parse(request.slot.start)||Date.parse(event.end?.dateTime)!==Date.parse(request.slot.end))return failure('event_conflict');\n return {ok:true,eventId:event.id};\n}\nreturn $input.all().map((item,index)=>{\n const request=$('Prepare request').itemMatching(index).json;\n // Em 409, recuperar o evento e conferir a identidade; nunca presumir sucesso.\n if(item.json.error===undefined && item.json.statusCode===409)return {json:{...request,recover:true}};\n return {json:{recover:false,result:existingEvent(item.json,request)}};\n});"
+      },
+      "id": "a0220022-0000-4022-8022-000000000021",
+      "name": "Insert result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a1e021-0103-4f21-9a21-000000000103",
+              "leftValue": "={{ $json.recover }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0220022-0000-4022-8022-000000000022",
+      "name": "Recover conflict",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3080, -200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.eventUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "a0220022-0000-4022-8022-000000000023",
+      "name": "Recover event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3300, -200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function failure(code, retryable = false, field) {\n  return {ok:false,error:{code,retryable,...(field ? {field} : {})}};\n}\n\nfunction object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }\n\nfunction httpFailure(response) {\n if(response.error!==undefined) {\n   const message=typeof response.error==='string'?response.error:JSON.stringify(response.error??'');\n   return /invalid_grant|invalid_client|unauthorized_client|invalid_scope|private key|privateKey|asymmetric|PEM|JWT/i.test(message)?failure('auth'):failure('unavailable',true);\n }\n const status=response.statusCode;\n if(status>=200&&status<300)return null;\n if(status===401)return failure('auth');\n const reasons=response.body?.error?.errors?.map(e=>e.reason)??[];\n if(status===429||(status===403&&reasons.some(r=>['rateLimitExceeded','userRateLimitExceeded'].includes(r))))return failure('rate_limited',true);\n if(status===403)return failure('forbidden');\n if(status===404||status===410)return failure('not_found');\n if(status>=500)return failure('unavailable',true);\n return failure('provider_error');\n}\n\nfunction existingEvent(response,request) {\n const error=httpFailure(response);\n if(error)return error;\n const event=response.body;\n const metadata=event?.extendedProperties?.private;\n if(event?.id!==request.eventId || event.status==='cancelled' || metadata?.zenvolyx!=='true' || metadata?.clientId!==request.clientId || metadata?.leadId!==request.lead.id || Date.parse(event.start?.dateTime)!==Date.parse(request.slot.start)||Date.parse(event.end?.dateTime)!==Date.parse(request.slot.end))return failure('event_conflict');\n return {ok:true,eventId:event.id};\n}\nreturn $input.all().map((item,index)=>({json:{result:existingEvent(item.json,$('Prepare request').itemMatching(index).json)}}));"
+      },
+      "id": "a0220022-0000-4022-8022-000000000024",
+      "name": "Recovered result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, -200]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item=>({json:item.json.result}));"
+      },
+      "id": "a0220022-0000-4022-8022-000000000025",
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3740, 0]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate request": {
+      "main": [
+        [
+          {
+            "node": "Is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is valid": {
+      "main": [
+        [
+          {
+            "node": "Event identity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event identity": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare request": {
+      "main": [
+        [
+          {
+            "node": "Is booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is booking": {
+      "main": [
+        [
+          {
+            "node": "Find existing event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read busy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find existing event": {
+      "main": [
+        [
+          {
+            "node": "Existing result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existing result": {
+      "main": [
+        [
+          {
+            "node": "Query busy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query busy": {
+      "main": [
+        [
+          {
+            "node": "Read busy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read busy": {
+      "main": [
+        [
+          {
+            "node": "Check availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check availability": {
+      "main": [
+        [
+          {
+            "node": "Create event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create event": {
+      "main": [
+        [
+          {
+            "node": "Insert event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert event": {
+      "main": [
+        [
+          {
+            "node": "Insert result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert result": {
+      "main": [
+        [
+          {
+            "node": "Recover conflict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recover conflict": {
+      "main": [
+        [
+          {
+            "node": "Recover event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recover event": {
+      "main": [
+        [
+          {
+            "node": "Recovered result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovered result": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

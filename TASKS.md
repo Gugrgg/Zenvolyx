@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T022 Criar o roteador `integrations/calendar/router/` (listSlots e book, com o cálculo de horários numa função testada) e o conector `integrations/calendar/google-calendar/` (ocupação e criação de evento pela conta de serviço)
-  Depende: T010, T012 | Sugerido: CODEX | Ref: integrations/calendar/README.md, DECISIONS.md (D018)
 - [ ] T039 Guardrails odontológicos na config: mensagem fixa de urgência `messages.urgent` (D026) e `messages.slotTaken` (horário ocupado), com validador, testes, README e todas as configs
   Depende: T037 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Regras de saúde), clients/README.md
 - [ ] T024 Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
@@ -70,6 +68,8 @@ ou o mínimo que a B012 definir).
   Depende: T010 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
 - [ ] T043 Remarcar e cancelar a avaliação pelo WhatsApp (hoje o pedido vai para a equipe)
   Depende: T029 | Sugerido: CLAUDE | Ref: integrations/calendar/README.md (Depois da demo)
+- [ ] T044 Definir e implementar proteção para reservas simultâneas de leads diferentes no mesmo horário, incluindo a política para edições humanas da agenda
+  Depende: T022, T029 | Sugerido: CLAUDE | Ref: integrations/calendar/google-calendar/README.md (Limites)
 - [ ] T026 Escolher o serviço de transcrição de áudio (custo, LGPD e integração)
   Depende: T011 | Sugerido: CLAUDE | Ref: docs/arquitetura/ia.md (Áudio)
 - [ ] T031 Criar `npm run clean:workflow`, que limpa o export da CLI do n8n conforme a D022, e fazer o `check:workflows` recusar campos da instância (`shared`, versões e datas); até lá, limpar o export à mão
@@ -118,6 +118,9 @@ podem começar antes de a demo ficar pronta.
 _(vazio)_
 
 ## Concluído
+
+- [x] T022 Criar o roteador de agenda e o conector Google Calendar: horários por fuso/expediente/ocupação, rechecagem antes da reserva e novas tentativas sem duplicar o mesmo pedido
+  Validação: 348 testes passando (52 de agenda), lint, tipos, check:workflows e check:clients; 15 cenários no n8n 2.40.5 com API simulada, incluindo horário tomado, 429/503, resposta perdida e HTTP 409. Dois fluxos publicados no n8n local; teste com conta e agenda Google reais fica para T040/T030.
 
 <!-- Manter só as ~20 mais recentes. Mais antigas: mover para docs/tasks-arquivo.md. -->
 
@@ -285,19 +288,22 @@ Observações:
 - Simular o Google no n8n local: uma API do Sheets simulada roda dentro do container, em 127.0.0.1 (a proteção contra SSRF do n8n vem desligada), com o conector numa variante com a URL trocada e sem credencial. Um workflow temporário chama o roteador pelo `n8n execute`, que serve porque o CRM não usa Data table. Reiniciar o n8n encerra a API simulada.
 - No n8n local ficaram arquivados os workflows `t021Harness00001` e `t021Probe0000001` e a credencial "T021 teste (pode apagar)", com uma chave descartável sem conta. Podem ser apagados pelo editor.
 
-### Handoff T010
+### Handoff T022
 Concluído:
-- contrato da agenda em integrations/calendar/README.md; D018
-- config com `timezone` obrigatório, `calendar` e `scheduling`; o contrato do CRM recebe `timezone` e o formato de `appointment`
+- `calendarRouter01`: valida `listSlots`/`book`, calcula horários e repete uma vez as falhas transitórias; `googleCalendar01`: consulta ocupação e cria eventos pela conta de serviço (D018/D029).
+- Cálculo puro em `slots.js`, embutido no Code node e conferido por teste; fixtures de almoço, ocupação, antecedência e horário tomado. IDs estáveis recuperam reservas após resposta perdida ou HTTP 409, conferindo identidade e intervalo.
+- Fluxos importados, publicados e exportados do n8n local; exports versionados sem credenciais. Os quatro nós HTTP locais usam `Google (conta de serviço)` (`googleServiceAcc`). Nenhuma chave ou escopo da credencial foi alterado.
 Arquivos principais:
-- integrations/calendar/README.md
-- DECISIONS.md (D018)
-Próxima tarefa: T022
+- integrations/calendar/router/README.md e workflow.json; integrations/calendar/router/slots.js
+- integrations/calendar/google-calendar/README.md e workflow.json
+- tests/calendar.test.ts; tests/fixtures/calendar/
+Próximas tarefas: T040 e T029 (quando suas demais dependências estiverem concluídas)
 Observações:
-- T022: cálculo de horários numa função pura em JS, testada com Vitest (fuso, expediente com intervalo, antecedência mínima, dias à frente, ocupação); o Code node do n8n usa o mesmo código, e um teste confere que os dois são iguais.
-- T022: Calendar API pelo nó HTTP Request com a credencial de conta de serviço (escopo de Calendar): consulta de ocupação e criação de evento com `extendedProperties.private` (`leadId` e marca da Zenvolyx), sem `attendees`. README com passo a passo para o cliente compartilhar a agenda ("Fazer alterações nos eventos") e achar o `calendarId`.
-- T022: fixtures fictícias em `tests/fixtures/calendar/`: expediente com almoço, compromisso ocupando horário, antecedência mínima e horário tomado entre `listSlots` e `book`.
-- T022: usar a credencial `Google (conta de serviço)` (ID `googleServiceAcc`, D029), acrescentando o escopo do Calendar ao campo Scope(s), no nó HTTP Request com autenticação predefinida `googleApi`. Credencial recusada chega como `error` com `invalid_grant`; chave vazia ou errada, com "secretOrPrivateKey must be an asymmetric key". Ver o nó **Result** do conector google-sheets.
+- T040/T030: ativar Calendar API, acrescentar o escopo `https://www.googleapis.com/auth/calendar` preservando o de Sheets e compartilhar a agenda fictícia com a conta de serviço. Seguir o README do conector; a API simulada não valida permissões reais do Google.
+- T029: chamar o roteador via Execute Workflow (versão 1.2, fonte Database, um item por chamada). Guardar os horários oferecidos; `book` recebe a opção guardada, nunca uma data inventada pela IA ou enviada livremente pelo lead. Não recebe `scheduling`.
+- Horários UTC, rótulos no fuso do cliente, limite de 10; omitir horários ambíguos/inexistentes em DST. `slot_taken` pede nova listagem; `event_conflict` exige equipe. O roteador já repetiu falhas transitórias e registrou somente código/clientId; T027 acrescenta o aviso.
+- Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
+- Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
 ### Handoff T011
 Concluído:

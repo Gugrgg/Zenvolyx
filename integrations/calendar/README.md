@@ -1,8 +1,9 @@
 # Agenda (contrato do conector)
 
 Contrato que os fluxos usam para oferecer horários e marcar atendimentos (D011, D018). Os fluxos
-chamam o roteador em `router/`, que calcula os horários pela config do cliente e usa o fornecedor
-de `calendar.provider`; cada fornecedor fica em `integrations/calendar/<fornecedor>/` (T022).
+chamam o [roteador](router/README.md) (`calendarRouter01`), que calcula os horários pela config
+do cliente e usa o fornecedor de `calendar.provider`. O [conector Google](google-calendar/README.md)
+tem ID `googleCalendar01` (T022). Chamar com Execute Workflow, fonte Database, modo Run once for each item.
 
 ## listSlots
 
@@ -65,8 +66,11 @@ Saída: `{ "ok": true, "eventId": "..." }`.
 ## Saída com falha
 
 `{ "ok": false, "error": { "code": "...", "retryable": true } }`. Códigos próprios: `slot_taken` e
-`unknown_provider` (ambos com `retryable` `false`). Erro temporário do fornecedor: o conector tenta
-de novo antes de devolver falha.
+`unknown_provider` (ambos com `retryable` `false`). Também: `invalid_input` (com `field`),
+`no_provider`, `auth`, `forbidden`, `not_found`, `event_conflict` e `provider_error`, sem nova
+tentativa; `rate_limited` e `unavailable`, com `retryable: true`. O roteador tenta mais uma vez
+após 2 segundos para erros temporários. Em `book`, o conector reconhece uma gravação anterior
+pela identidade estável do evento, inclusive após resposta perdida.
 
 ## Regras
 
@@ -99,5 +103,5 @@ precisar, informando ocupação e criando eventos do mesmo jeito.
 - Lembrete antes do horário, por template de utilidade enviado ao BSUID guardado no evento (T023).
 - Remarcar e cancelar pelo WhatsApp (T043). Até lá, o pedido vai para a equipe.
 
-Como testar: fixtures fictícias em `tests/fixtures/calendar/` e roteiro de verificação no README de
-cada fornecedor (T022).
+Como testar: `npm test -- tests/calendar.test.ts`, fixtures fictícias em `tests/fixtures/calendar/`
+e roteiro de verificação no [README do Google Calendar](google-calendar/README.md#verificação).
