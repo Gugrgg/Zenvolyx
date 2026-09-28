@@ -56,8 +56,8 @@ test.each(["duplicate-option", "unknown-option", "overlapping-hours"])(
 );
 
 const invalidFields: { path: (string | number)[]; value: unknown }[] = [
-  { path: ["version"], value: 2 },
-  { path: ["version"], value: "1" },
+  { path: ["version"], value: 1 },
+  { path: ["version"], value: "2" },
   { path: ["id"], value: "Cliente_invalido" },
   { path: ["name"], value: "  " },
   { path: ["active"], value: "false" },
@@ -128,6 +128,20 @@ test.each(Object.keys(validConfig().messages))("requires message %s", (key) => {
   expect(
     clientConfigSchema.safeParse(change(["messages", key], " ")).success,
   ).toBe(false);
+});
+
+test("the dental demo keeps a fixed urgent message with escalation and emergency guidance", () => {
+  const clinic = clientConfigSchema.parse(
+    JSON.parse(
+      readFileSync(
+        new URL("../clients/odontologia-demo/config.json", import.meta.url),
+        "utf8",
+      ),
+    ),
+  );
+  expect(clinic.messages.urgent).toMatch(/equipe/i);
+  expect(clinic.messages.urgent).toMatch(/pronto-socorro|192/i);
+  expect(clinic.messages.urgent).not.toMatch(/\{[^}]+\}/);
 });
 
 test.each(
@@ -329,7 +343,7 @@ test("fails for missing or empty client directories", () => {
   }
 });
 
-test("all clients/*/config.json in the repository match version 1", () => {
+test("all clients/*/config.json in the repository match version 2", () => {
   const messages: string[] = [];
   expect(
     checkClientDirectory("clients", (m) => messages.push(m)),

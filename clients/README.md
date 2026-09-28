@@ -16,14 +16,14 @@ clients/
     └── README.md     # conectores, checklist de ativação e particularidades
 ```
 
-## config.json (versão 1)
+## config.json (versão 2)
 
 Em JSON, porque o n8n lê sem biblioteca extra. Chaves em inglês; textos para o lead em português.
 Exemplo completo: [`_template/config.json`](_template/config.json).
 
 | Campo | Obrigatório | Conteúdo |
 |-------|-------------|----------|
-| `version` | sim | Versão do formato: `1`. |
+| `version` | sim | Versão do formato: `2`. |
 | `id` | sim | Igual ao nome da pasta. |
 | `name` | sim | Nome do negócio, como aparece nas mensagens. |
 | `timezone` | sim | Fuso do cliente no padrão IANA (ex.: `America/Sao_Paulo`), usado em horários e datas. |
@@ -36,7 +36,7 @@ Exemplo completo: [`_template/config.json`](_template/config.json).
 | `qualification.questions` | sim | Perguntas, na ordem em que são feitas: `id`, `text`, `type` (`text`, `choice` ou `number`) e, em `choice`, `options` com `id` e `label`: até 10 opções, `label` com até 20 caracteres (limites de botões e listas do WhatsApp). |
 | `qualification.rules` | sim | Condições para o lead ser qualificado; todas precisam valer, e lista vazia qualifica todos. Em `choice`: `{ "question": "service", "in": ["evaluation"] }`. Em `number`: `min` e/ou `max`. Pergunta `text` não entra em regra. |
 | `ai` | não | IA na conversa (D019): `enabled` (liga ou desliga) e `knowledge`, lista de `{ "topic", "text" }` com informações públicas do negócio que a IA pode usar para tirar dúvidas, até 6.000 caracteres no total. Sem `ai`, a conversa segue só com botões; detalhes em [integrations/ai](../integrations/ai/README.md). |
-| `messages` | sim | Textos fixos: `welcome` (primeira resposta), `handoff` (ao chamar a equipe), `failure` (quando algo falha), `notQualified` (lead fora das regras), `chooseSlot` (antes da lista de horários), `noSlots` (sem horário livre), `booked` (confirmação; `{slot}` vira o horário marcado) e `stopped` (depois do pedido para parar). |
+| `messages` | sim | Textos fixos: `welcome` (primeira resposta), `handoff` (ao chamar a equipe), `failure` (quando algo falha), `urgent` (urgência: resposta fixa e encaminhamento à equipe), `notQualified` (lead fora das regras), `chooseSlot` (antes da lista de horários), `noSlots` (sem horário livre), `slotTaken` (horário ocupado entre listagem e reserva), `booked` (confirmação; `{slot}` vira o horário marcado) e `stopped` (depois do pedido para parar). |
 
 Regras do conteúdo:
 
@@ -44,6 +44,11 @@ Regras do conteúdo:
   secreto ou pessoal fica no n8n (D014).
 - Perguntar só o necessário para qualificar e agendar; em saúde, nunca histórico clínico
   (AGENTS.md, seção 5).
+- `messages.urgent` é escrito e revisado pela clínica, não pela IA: chama a equipe e, nos casos
+  graves, orienta procurar pronto-socorro ou ligar 192 ([regra de urgência](../docs/arquitetura/ia.md#urgência)).
+  `messages.slotTaken` oferece nova escolha, sem confirmar a reserva anterior. Ambos são
+  obrigatórios mesmo sem IA ou agenda, para que a config esteja pronta quando esses recursos
+  forem ativados. O validador exige textos não vazios; a revisão do conteúdo cabe ao dono.
 - Mudança de formato sobe `version` e atualiza, na mesma tarefa, todas as configs, este README
   e o validador (T015).
 - Seção nova (ex.: lembretes, na T023) entra pela tarefa que a decide e é documentada aqui.
@@ -69,7 +74,7 @@ mensagem seguinte, sem reiniciar o n8n.
 ## Validação automática
 
 `npm run check:clients` valida todas as `clients/*/config.json`, inclusive modelos
-e clientes inativos. O schema Zod da versão 1 fica em
+e clientes inativos. O schema Zod da versão 2 fica em
 [scripts/client-config-schema.ts](../scripts/client-config-schema.ts); o comando
 termina com código 1 se houver problema, indicando arquivo e campo sem imprimir valores.
 
@@ -83,7 +88,8 @@ Além dos tipos e campos obrigatórios, confere:
 - fuso IANA, agenda com regras de horário, faixas em ordem crescente e sem sobreposição
   (horários contíguos são aceitos; faixas que atravessam a meia-noite não são aceitas);
 - serviço apontando para pergunta `choice`, base de IA com até 6.000 caracteres
-  somando `topic` e `text`, e confirmação com `{slot}`.
+  somando `topic` e `text`, confirmação com `{slot}` e mensagens de urgência e horário ocupado
+  presentes e não vazias.
 
 Campos desconhecidos são rejeitados para detectar erros de digitação e adições fora
 do formato. A validação não altera arquivos, não consulta fornecedores e não verifica

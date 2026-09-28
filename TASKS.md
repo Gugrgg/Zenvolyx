@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T039 Guardrails odontológicos na config: mensagem fixa de urgência `messages.urgent` (D026) e `messages.slotTaken` (horário ocupado), com validador, testes, README e todas as configs
-  Depende: T037 | Sugerido: CODEX | Ref: docs/arquitetura/ia.md (Regras de saúde), clients/README.md
 - [ ] T024 Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
   Depende: T011, T012 | Sugerido: CODEX | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
 - [ ] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
@@ -118,6 +116,10 @@ podem começar antes de a demo ficar pronta.
 _(vazio)_
 
 ## Concluído
+
+- [x] T039 Guardrails odontológicos na config: mensagens fixas `urgent` e `slotTaken` obrigatórias, com versão 2 do formato, configs, fixtures, testes e README atualizados
+  Ref: clients/README.md, clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Urgência)
+  Validação: 351 testes, lint, tipos, check:clients (3 configs) e check:workflows passaram. Texto da clínica fictícia encaminha à equipe e orienta pronto-socorro ou 192 nos casos graves; o dono revisa antes de ativar.
 
 - [x] T022 Criar o roteador de agenda e o conector Google Calendar: horários por fuso/expediente/ocupação, rechecagem antes da reserva e novas tentativas sem duplicar o mesmo pedido
   Validação: 348 testes passando (52 de agenda), lint, tipos, check:workflows e check:clients; 15 cenários no n8n 2.40.5 com API simulada, incluindo horário tomado, 429/503, resposta perdida e HTTP 409. Dois fluxos publicados no n8n local; teste com conta e agenda Google reais fica para T040/T030.
@@ -342,8 +344,19 @@ Concluído:
 Arquivos principais:
 - clients/odontologia-demo/config.json
 - docs/arquitetura/demo-cenarios.md
-Próxima tarefa: T039
+Próximas tarefas: T038 e T040
 Observações:
-- T039: `messages.urgent` e `messages.slotTaken` obrigatórias em todas as configs (modelo, Zenvolyx, clínica e fixtures de `tests/fixtures/clients/`). Texto de exemplo da urgência em docs/arquitetura/ia.md (Urgência); nas configs que não são de saúde, adaptar sem falar em dentista. `slotTaken`, por exemplo: "Esse horário acabou de ser ocupado. Veja outras opções:".
 - T038 e T040 (Claude) completam a config da clínica; o README dela diz o que falta em cada uma.
 - A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).
+
+### Handoff T039
+Concluído:
+- `messages.urgent` e `messages.slotTaken` obrigatórias e não vazias em todas as configs e fixtures; formato da config atualizado para versão 2.
+- Mensagem de urgência fixa na clínica fictícia, com encaminhamento à equipe e orientação para casos graves; texto de horário ocupado pede nova escolha.
+Arquivos principais:
+- clients/README.md; clients/odontologia-demo/config.json
+- scripts/client-config-schema.ts; tests/client-config.test.ts
+Próximas tarefas: T028 e T029, quando suas demais dependências estiverem concluídas
+Observações:
+- T028: ao identificar `urgent`, enviar o texto de `messages.urgent` da config, ignorando uma eventual resposta escrita pela IA; registrar CRM e pausar conforme D026. A clínica revisa esse texto antes da ativação (T030).
+- T029: após `slot_taken`, enviar `messages.slotTaken` e uma nova lista; não confirmar o horário anterior.

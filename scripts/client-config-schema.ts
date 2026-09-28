@@ -75,7 +75,7 @@ function isTimeZone(value: string): boolean {
 
 export const clientConfigSchema = z
   .strictObject({
-    version: z.literal(1),
+    version: z.literal(2),
     id: identifier.regex(/^_?[a-z0-9]+(?:-[a-z0-9]+)*$/),
     name: nonBlank,
     active: z.boolean(),
@@ -119,9 +119,11 @@ export const clientConfigSchema = z
       welcome: nonBlank,
       handoff: nonBlank,
       failure: nonBlank,
+      urgent: nonBlank,
       notQualified: nonBlank,
       chooseSlot: nonBlank,
       noSlots: nonBlank,
+      slotTaken: nonBlank,
       booked: nonBlank.refine((text) => text.includes("{slot}"), {
         message: "A confirmação deve conter {slot}.",
       }),

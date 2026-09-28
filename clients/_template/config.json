@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "_template",
   "name": "Clínica Exemplo",
   "active": false,
@@ -76,9 +76,11 @@
     "welcome": "Olá! Você falou com a Clínica Exemplo. Vou fazer duas perguntas rápidas para te atender melhor.",
     "handoff": "Obrigado! Vou chamar alguém da nossa equipe para continuar com você.",
     "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve.",
+    "urgent": "Sinto muito que você esteja passando por isso. Vou chamar nossa equipe para te atender com prioridade. Se tiver dificuldade para respirar ou engolir, sangramento que não para ou inchaço que aumenta rápido, procure agora um pronto-socorro ou ligue 192.",
     "notQualified": "Obrigado pelas respostas! No momento, esse atendimento não está entre os que oferecemos. Se precisar, é só chamar.",
     "chooseSlot": "Ótimo! Escolha um horário para a sua avaliação:",
     "noSlots": "Não encontrei horários livres agora. Vou chamar alguém da equipe para combinar com você.",
+    "slotTaken": "Esse horário acabou de ser ocupado. Veja outras opções:",
     "booked": "Pronto! Sua avaliação ficou para {slot}. Até lá!",
     "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
   }

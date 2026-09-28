@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "cliente-ficticio",
   "name": "Negócio Exemplo",
   "active": true,
@@ -82,9 +82,11 @@
     "welcome": "Olá!",
     "handoff": "Vamos chamar a equipe.",
     "failure": "Tente mais tarde.",
+    "urgent": "Vou chamar nossa equipe para te atender com prioridade.",
     "notQualified": "Obrigado!",
     "chooseSlot": "Escolha um horário.",
     "noSlots": "Sem horários.",
+    "slotTaken": "Esse horário foi ocupado. Veja outras opções:",
     "booked": "Agendado: {slot}.",
     "stopped": "Atendimento encerrado."
   }

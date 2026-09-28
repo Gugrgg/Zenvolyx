@@ -16,7 +16,6 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 | Tarefa | O que entra |
 |--------|-------------|
 | T038 | Base administrativa em `ai`: endereço, funcionamento, tratamentos oferecidos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento. |
-| T039 | `messages.urgent` (exemplo em [ia.md](../../docs/arquitetura/ia.md#urgência)) e `messages.slotTaken`. |
 | T040 | `calendar` e `scheduling`, com `serviceQuestion: "procedure"` para o evento levar o tratamento, e a agenda de demonstração com compromissos fictícios. |
 
 ## Conectores
@@ -39,6 +38,9 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 
 - Sem coexistência, "chamar a equipe" aparece na planilha, nas etapas "Com a equipe" e "Urgência";
   na demo, quem faz o papel da equipe é o dono.
+- `messages.urgent` é o texto fixo da clínica para chamar a equipe e orientar pronto-socorro ou
+  192 nos casos graves ([regra](../../docs/arquitetura/ia.md#urgência)); a IA não o escreve.
+  `messages.slotTaken` pede outra escolha quando alguém ocupa o horário antes da reserva.
 - Nada de preço de tratamento, promoção, "avaliação gratuita" ou condição de pagamento em tom de
   oferta: o Código de Ética Odontológica proíbe esse tipo de publicidade (art. 44, I). A IA só fala
   de pagamento quando perguntada (D026).

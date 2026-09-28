@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "zenvolyx",
   "name": "Zenvolyx",
   "active": false,
@@ -101,9 +101,11 @@
     "welcome": "Olá! Aqui é a Zenvolyx, automação de atendimento pelo WhatsApp com IA. Vou fazer três perguntas rápidas para entender o seu negócio.",
     "handoff": "Obrigado! Vou chamar alguém da equipe da Zenvolyx para continuar com você.",
     "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve.",
+    "urgent": "Sinto muito que você esteja passando por isso. Vou chamar nossa equipe para te atender com prioridade. Se houver risco imediato à sua saúde ou segurança, procure um serviço de emergência ou ligue 192.",
     "notQualified": "Obrigado pelas respostas! Hoje nosso foco são negócios de atendimento com agendamento, mas vou passar seu contato para a equipe avaliar.",
     "chooseSlot": "Ótimo! Vamos marcar uma apresentação de 30 minutos por videochamada. Escolha um horário:",
     "noSlots": "Não encontrei horários livres agora. Vou chamar alguém da equipe para combinar com você.",
+    "slotTaken": "Esse horário acabou de ser ocupado. Veja outras opções:",
     "booked": "Pronto! Sua apresentação ficou para {slot}. Enviaremos o link da videochamada antes do horário.",
     "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
   }
