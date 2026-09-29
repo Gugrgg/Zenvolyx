@@ -113,11 +113,12 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T024 [CODEX] Criar o conector de IA `integrations/ai/anthropic/` (ação interpret pela API do Claude, com saída estruturada, cache, validação da resposta, regras de saúde e intenção `urgent`), conferindo à mão os casos da IA nos cenários da demo
-  Depende: T011, T012 | Ref: integrations/ai/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026)
-  Implementação pronta e importada como rascunho no n8n local; 423 testes (72 do conector), lint, tipos e validadores passaram. 14 cenários passaram no n8n com API simulada, em instância descartável; execução final da CLI com publicação em modo de compatibilidade (`N8N_USE_WORKFLOW_PUBLICATION_SERVICE=false`), sem alterar o ambiente local principal (T045).
-  Pendente: o dono cadastrar a credencial `Anthropic Zenvolyx` no n8n; depois publicar pelo editor e conferir com a API real os cenários 3, 7, 8, 9 e 11. Nenhuma chamada paga foi feita. Não marcar concluída antes dessa conferência.
-  Pausada por decisão do dono em 2026-09-28: não gastar com API agora. Não comprar créditos, configurar cobrança nem executar chamadas pagas até nova autorização explícita. A implementação permanece pronta; a validação real e a conclusão da T024 ficam adiadas.
+- [ ] T024 [CODEX] Criar o conector de IA com saída estruturada, validação, regras de saúde e intenção urgent; Gemini gratuito na demo fictícia (D030), preservando Anthropic
+  Depende: T011, T012 | Ref: integrations/ai/README.md, integrations/ai/gemini/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026, D030)
+  Implementado: aiGeminiDemo0001 com gemini-3.8-flash, LOW, até 4.096 tokens; dataMode synthetic obrigatório; credencial Gemini Zenvolyx Demo. Anthropic preservado, sem chamadas pagas. 510 testes (87 Gemini), lint, tipos, 10 workflows e 3 configs passaram.
+  Ensaio real em 2026-09-29: resposta administrativa + cleaning corretos; cenário 7 urgent sem texto; 9 other sem revelar prompt/remédio/preço; 11 question, sem diagnóstico/remédio e com convite. Cenário 3 explicou a política mas não convidou explicitamente; 8 encaminhou à equipe mas não declarou claramente a ausência da informação. As duas instruções foram reforçadas no prompt compartilhado e em ambos os exports.
+  Pendente: revalidar os cinco cenários 3, 7, 8, 9 e 11 com o prompt final, depois publicar pelo editor. HTTP 503 durante o ensaio e HTTP 429 ao esgotar a cota gratuita: GenerateRequestsPerDayPerProjectPerModel-FreeTier, limite 20/dia. Testes finais 3/8 bloqueados; não marcar concluída nem trocar para cobrança paga. Versão final importada como rascunho; a versão anterior chegou a ser publicada e chamada via Execute Workflow (inclusive validando o bloqueio sem dataMode).
+  Gasto: projeto confirmado no Nível gratuito, sem ativar faturamento ou comprar créditos; somente dados fictícios. Retomar após renovar a cota, sem insistir em 429 diário e sem fallback pago.
 
 ## Concluído
 
@@ -311,22 +312,23 @@ Observações:
 - Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
 - Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
-### Handoff T024 (validação real pendente)
-Implementado e testado com API simulada:
-- `aiAnthropic00001`: valida entrada, envia somente business/question/message, exige saída estruturada e confere a resposta; uma nova tentativa para falhas transitórias.
-- Modelo `claude-opus-5-5`, esforço `low`, até 2.000 tokens; cache de 5 minutos no último bloco fixo. Instruções de saúde e ordem `urgent`, `stop`, `human`, `answer`, `question`, `other`.
-- Em `urgent` e `stop`, answer/reply são descartados; métricas sem conteúdo da conversa. O workflow desliga persistência de execuções, inclusive com erro.
+### Handoff T024 (Gemini implementado; validação final pendente de cota)
+Implementado:
+- Demo: aiGeminiDemo0001 em integrations/ai/gemini/; credencial Google Gemini(PaLM) Api, nome Gemini Zenvolyx Demo. Projeto no nível gratuito, sem faturamento.
+- Config em gemini/config.ts; instruções únicas em anthropic/instructions.md, embutidas e conferidas por testes nos dois workflows. O prompt final explicita convite à avaliação no preço e falta da informação em human.
+- dataMode synthetic obrigatório antes de qualquer HTTP; não anonimiza texto nem verifica faturamento. Nunca usar com pacientes reais. T028 deve fornecer esse campo só na demo controlada (D030).
+- Validação estrutural, semântica, urgência/parada sem texto gerado, nova tentativa transitória e execuções sem persistência. 510 testes, incluindo 87 Gemini, mais lint/tipos/validadores passaram.
 Arquivos principais:
-- integrations/ai/anthropic/config.ts; instructions.md; workflow.json; README.md
-- tests/ai-anthropic.test.ts; tests/fixtures/ai/input.json; tests/fixtures/ai/demo-cases.json
-Próxima tarefa: concluir T024 com a credencial do dono, antes da T028
+- integrations/ai/gemini/config.ts, workflow.json, README.md; integrations/ai/anthropic/instructions.md
+- tests/ai-gemini.test.ts; tests/fixtures/ai/input.json e demo-cases.json
+Próxima tarefa: concluir a conferência final da T024 quando renovar a cota; depois T028
 Observações:
-- Em 2026-09-28, o dono adiou gastos com API. Não solicitar novamente a chave nem executar chamadas pagas até ele autorizar a retomada. Manter T024 pendente; testes simulados não substituem a validação real.
-- Credencial ausente em 2026-09-28: workflow local importado sem publicar; selecionar `Anthropic Zenvolyx` (tipo `anthropicApi`) nos dois nós HTTP, salvar e publicar pelo editor. A chave não deve ir ao chat ou ao Git.
-- Cenários reais 3, 7, 8, 9 e 11: todos pendentes, por falta de credencial. A fixture traz base fictícia só para o ensaio; não substitui a T038. Passos e critérios no README do conector. Testes simulados não demonstram a qualidade clínica/administrativa das respostas reais.
-- Os 14 cenários no n8n cobriram resposta, pensamento antes do JSON, urgência/parada sem texto gerado, urgência com texto descartável longo, recusa, truncamento, opção inexistente, resposta longa/malformada, autenticação, 429, 503 e entrada inválida. O modo de compatibilidade de publicação foi usado somente na instância descartável de teste; a T045 trata o problema de CLI.
-- T028: tratar a intenção antes de gravar answer ou enviar reply; urgent envia `messages.urgent` fixo, CRM urgent e pausa. Sem IA, manter botões; falhas seguem o fallback de D019. O workflow pai também deve impedir gravação de conteúdo pessoal em execuções/logs.
-- T025: reutilizar `config.ts`, `instructions.md` e fixtures; SDK oficial `@anthropic-ai/sdk`, dependência justificada, `ANTHROPIC_API_KEY` no `.env` e nome no `.env.example`. Avaliação com acertos/custo, fora de `npm test`, executada só quando pedida.
+- Em 2026-09-29, o Gemini esgotou 20 requisições/dia/modelo no plano gratuito (HTTP 429, quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier). Houve também vários 503. Não insistir em 429 diário, trocar de projeto para contornar limite nem ativar cobrança. Testes simulados não comprovam qualidade real.
+- Resultados anteriores ao último ajuste: escolha cleaning/endereço, urgência, manipulação e dúvida clínica corretos. Preço e pergunta fora da base motivaram o ajuste das instruções. Repetir os cinco cenários com o prompt final; não considerar as respostas antigas como validação da nova versão.
+- Workflow final importado sem publicar. Publicar pelo editor após a validação (T045); exportar limpando credentials/versões/execuções conforme D022. A publicação anterior foi conferida via Execute Workflow, sem o modo de compatibilidade de CLI.
+- O workflow temporário geminiTest024001 contém só fixtures e referência à credencial; não salva execuções. Pode ser reutilizado no ensaio, seguindo o README.
+- T028: urgent manda messages.urgent fixo, CRM urgent e pausa; stop também descarta reply. Falha mantém botões e segue D019; workflow pai não deve guardar texto em logs/execuções.
+- Anthropic continua com validação real paga adiada até nova autorização de gasto. Nenhuma chave vai ao chat, Git ou logs. T025 reutiliza config/instruções/fixtures do provedor escolhido para produção, após nova decisão.
 
 ### Handoff T009
 Concluído:

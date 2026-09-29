@@ -14,7 +14,9 @@ O modelo, esforço, limite de saída e esquema ficam em [config.ts](config.ts).
 As regras administrativas e de saúde ficam em [instructions.md](instructions.md).
 Os dois são embutidos no nó **Prepare request**; o teste confere a igualdade para evitar
 divergência. A avaliação da T025 deve ler esses mesmos arquivos. Ao alterá-los, atualizar
-o nó, exportar o workflow e testar a igualdade novamente.
+o nó, exportar o workflow e testar a igualdade novamente. As instruções também são
+usadas pelo [Gemini da demo](../gemini/README.md) (D030): atualizar os dois exports
+quando o texto compartilhado mudar. A validação real paga da Anthropic continua adiada.
 
 O esquema é fixo, sem opções de cliente no enum. Instruções e base formam o prefixo;
 o último bloco de sistema tem `cache_control: { "type": "ephemeral" }` (5 minutos).

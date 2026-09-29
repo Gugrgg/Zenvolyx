@@ -61,6 +61,8 @@ Ler `DECISIONS.md` só quando a tarefa mexer em arquitetura, estrutura ou algo j
 Estrutura base criada em T003 (D010). Cada pasta de primeiro nível e as subpastas
 de `docs/` têm um `README.md` curto: propósito, como rodar ou usar, como testar ou validar.
 Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
+IA: `integrations/ai/gemini/` serve somente à demo com dados fictícios (D030);
+`integrations/ai/anthropic/` permanece com validação real paga adiada.
 
 ## 4. Regras de desenvolvimento
 

@@ -1,8 +1,10 @@
 # IA (contrato do conector)
 
 Contrato que os fluxos usam para interpretar mensagens de leads com IA (D011, D019). A
-implementação fica em [anthropic/](anthropic/README.md), sub-workflow `aiAnthropic00001`
-(T024). Abordagem completa:
+demo usa [gemini/](gemini/README.md), sub-workflow `aiGeminiDemo0001`, com
+`dataMode: "synthetic"` obrigatório e somente dados fictícios (D030). O conector
+[anthropic/](anthropic/README.md), `aiAnthropic00001`, permanece disponível, com
+validação real paga adiada. Abordagem completa:
 [docs/arquitetura/ia.md](../../docs/arquitetura/ia.md).
 
 ## interpret
@@ -63,7 +65,7 @@ ausente/recusada) e `provider_error` (configuração/requisição recusada), sem
 - Modelo, esforço e instruções ficam num só lugar do repositório, usado pelo sub-workflow e pela
   avaliação (T025).
 
-Como testar: `npm test -- tests/ai-anthropic.test.ts`, casos fictícios em `tests/fixtures/ai/`
-e o [roteiro do conector](anthropic/README.md#testar). A avaliação da T025 chama a IA de
+Como testar: `npm test -- tests/ai-anthropic.test.ts tests/ai-gemini.test.ts`, casos fictícios em `tests/fixtures/ai/`
+e o [roteiro da demo gratuita](gemini/README.md#testar). A avaliação da T025 chama a IA de
 verdade (com custo) e por isso fica fora do `npm test`. Até a demo, os casos de saúde dos
 [cenários da demo](../../docs/arquitetura/demo-cenarios.md) são conferidos à mão (T024, T030).

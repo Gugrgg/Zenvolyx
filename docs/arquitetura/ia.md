@@ -86,7 +86,16 @@ casos graves. Exemplo:
 
 Sem `ai.enabled`, a conversa segue só com botões e listas.
 
-## Provedor e modelo
+## Demo gratuita (D030)
+
+Por decisão do dono em 2026-09-29, a demo usa Gemini 3.8 Flash no nível gratuito,
+com esforço LOW e dados inteiramente fictícios. O conector exige dataMode synthetic;
+isso não anonimiza texto. Não conectar pacientes reais nem ativar faturamento.
+Implementação e limites: [Gemini](../../integrations/ai/gemini/README.md).
+A validação real da T024 passa a usar Gemini; a Anthropic segue sem chamadas pagas.
+Antes do primeiro cliente real, reavaliar provedor/plano e tratamento de dados.
+
+## Provedor e modelo (Anthropic, fora da demo gratuita)
 
 - API do Claude (Anthropic), chamada pelo nó HTTP Request, para usar saída estruturada (resposta
   sempre no formato JSON combinado), cache de prompt e controle de esforço.
@@ -145,6 +154,9 @@ T030 ([demo-cenarios.md](demo-cenarios.md)). A T025 vem depois da demo, reaprove
 e é exigida antes do primeiro cliente real.
 
 ## O que o dono precisa fazer
+
+Na demo gratuita, manter o projeto Gemini no nível gratuito e a chave somente no n8n.
+Os passos abaixo se aplicam à retomada da Anthropic, que depende de nova autorização de gasto.
 
 - Criar a conta no Console da Anthropic, gerar a chave da API e cadastrá-la como credencial no
   n8n, nunca no repositório.

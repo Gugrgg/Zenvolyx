@@ -20,6 +20,9 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 
 ## Conectores
 
+- IA da demo: [Gemini gratuito](../../integrations/ai/gemini/README.md), somente com
+  mensagens fictícias e `dataMode: "synthetic"` (D030). Não usar dados de pacientes reais.
+
 - CRM: `google-sheets`, com a planilha `Leads` da demo compartilhada com a conta de serviço (T021).
 - Agenda: `google-calendar`, com a agenda de demonstração compartilhada com a conta de serviço (T040).
 - WhatsApp: número de teste da Meta, com a porta criada à mão com o token da Zenvolyx
