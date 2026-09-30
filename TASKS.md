@@ -117,8 +117,9 @@ podem começar antes de a demo ficar pronta.
   Depende: T011, T012 | Ref: integrations/ai/README.md, integrations/ai/gemini/README.md, docs/arquitetura/ia.md, DECISIONS.md (D019, D026, D030)
   Implementado: aiGeminiDemo0001 com gemini-3.8-flash, LOW, até 4.096 tokens; dataMode synthetic obrigatório; credencial Gemini Zenvolyx Demo. Anthropic preservado, sem chamadas pagas. 510 testes (87 Gemini), lint, tipos, 10 workflows e 3 configs passaram.
   Ensaio real em 2026-09-29: resposta administrativa + cleaning corretos; cenário 7 urgent sem texto; 9 other sem revelar prompt/remédio/preço; 11 question, sem diagnóstico/remédio e com convite. Cenário 3 explicou a política mas não convidou explicitamente; 8 encaminhou à equipe mas não declarou claramente a ausência da informação. As duas instruções foram reforçadas no prompt compartilhado e em ambos os exports.
-  Pendente: revalidar os cinco cenários 3, 7, 8, 9 e 11 com o prompt final, depois publicar pelo editor. HTTP 503 durante o ensaio e HTTP 429 ao esgotar a cota gratuita: GenerateRequestsPerDayPerProjectPerModel-FreeTier, limite 20/dia. Testes finais 3/8 bloqueados; não marcar concluída nem trocar para cobrança paga. Versão final importada como rascunho; a versão anterior chegou a ser publicada e chamada via Execute Workflow (inclusive validando o bloqueio sem dataMode).
-  Gasto: projeto confirmado no Nível gratuito, sem ativar faturamento ou comprar créditos; somente dados fictícios. Retomar após renovar a cota, sem insistir em 429 diário e sem fallback pago.
+  Retomada em 2026-09-30 com o prompt final: cenários 7, 8 e 11 aprovados contra a API real. Urgência retornou urgent com answer/reply null; recibo retornou human, reconhecendo falta da informação e encaminhando à equipe; dúvida clínica convidou à avaliação sem diagnóstico/remédio. Os 510 testes, lint, tipos e validadores passaram novamente.
+  Pendente: validar os cenários 3 e 9, depois publicar pelo editor, conferir via Execute Workflow e exportar. Nesta retomada houve 14 chamadas (incluindo novas tentativas), com 3 respostas HTTP 200 e 11 HTTP 503; preço e manipulação permaneceram unavailable, sem resposta para avaliar. Não houve 429 nesta rodada. Interrompido por indisponibilidade persistente do provedor; não marcar concluída. Versão final segue como rascunho.
+  Gasto: projeto no Nível gratuito, sem ativar faturamento ou comprar créditos; somente dados fictícios. Em 2026-09-29 ocorreu 429 diário (GenerateRequestsPerDayPerProjectPerModel-FreeTier, 20/dia). Retomar os dois casos pendentes quando o serviço estabilizar, sem insistir em 429 diário e sem fallback pago.
 
 ## Concluído
 
@@ -312,7 +313,7 @@ Observações:
 - Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
 - Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
-### Handoff T024 (Gemini implementado; validação final pendente de cota)
+### Handoff T024 (Gemini implementado; dois cenários pendentes por HTTP 503)
 Implementado:
 - Demo: aiGeminiDemo0001 em integrations/ai/gemini/; credencial Google Gemini(PaLM) Api, nome Gemini Zenvolyx Demo. Projeto no nível gratuito, sem faturamento.
 - Config em gemini/config.ts; instruções únicas em anthropic/instructions.md, embutidas e conferidas por testes nos dois workflows. O prompt final explicita convite à avaliação no preço e falta da informação em human.
@@ -321,10 +322,11 @@ Implementado:
 Arquivos principais:
 - integrations/ai/gemini/config.ts, workflow.json, README.md; integrations/ai/anthropic/instructions.md
 - tests/ai-gemini.test.ts; tests/fixtures/ai/input.json e demo-cases.json
-Próxima tarefa: concluir a conferência final da T024 quando renovar a cota; depois T028
+Próxima tarefa: concluir os cenários 3 e 9 da T024 quando o Gemini estabilizar; depois T028
 Observações:
 - Em 2026-09-29, o Gemini esgotou 20 requisições/dia/modelo no plano gratuito (HTTP 429, quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier). Houve também vários 503. Não insistir em 429 diário, trocar de projeto para contornar limite nem ativar cobrança. Testes simulados não comprovam qualidade real.
-- Resultados anteriores ao último ajuste: escolha cleaning/endereço, urgência, manipulação e dúvida clínica corretos. Preço e pergunta fora da base motivaram o ajuste das instruções. Repetir os cinco cenários com o prompt final; não considerar as respostas antigas como validação da nova versão.
+- Em 2026-09-30, o prompt final foi validado na API real nos cenários 7 (urgent, answer/reply null), 8 (human, reconheceu falta da informação e encaminhou à equipe) e 11 (avaliação pelo dentista, convite, sem diagnóstico/remédio). Esses três casos não precisam ser repetidos se o prompt permanecer igual. Os 510 testes, lint, tipos, 10 workflows e 3 configs passaram novamente.
+- Restam os cenários 3 e 9: as tentativas retornaram HTTP 503 nas duas chamadas previstas pelo conector, com unavailable. A rodada teve 14 chamadas, 3 HTTP 200 e 11 HTTP 503, sem 429. Interrompida por indisponibilidade persistente; retomar sem alterar modelo/prompt apenas para contornar a falha. Respostas de versões anteriores não validam esses dois casos do prompt final.
 - Workflow final importado sem publicar. Publicar pelo editor após a validação (T045); exportar limpando credentials/versões/execuções conforme D022. A publicação anterior foi conferida via Execute Workflow, sem o modo de compatibilidade de CLI.
 - O workflow temporário geminiTest024001 contém só fixtures e referência à credencial; não salva execuções. Pode ser reutilizado no ensaio, seguindo o README.
 - T028: urgent manda messages.urgent fixo, CRM urgent e pausa; stop também descarta reply. Falha mantém botões e segue D019; workflow pai não deve guardar texto em logs/execuções.
