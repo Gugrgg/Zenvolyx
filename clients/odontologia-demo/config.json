@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "odontologia-demo",
   "name": "Clínica Sorriso Demo",
   "active": false,
@@ -51,5 +51,6 @@
     "slotTaken": "Esse horário acabou de ser ocupado. Veja outras opções:",
     "booked": "Pronto! Sua avaliação ficou marcada para {slot}. Se precisar remarcar, é só chamar por aqui.",
     "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
-  }
+  },
+  "ai": { "enabled": false, "dataMode": "synthetic", "knowledge": [] }
 }

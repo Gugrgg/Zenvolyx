@@ -57,6 +57,7 @@ test.each(["duplicate-option", "unknown-option", "overlapping-hours"])(
 
 const invalidFields: { path: (string | number)[]; value: unknown }[] = [
   { path: ["version"], value: 1 },
+  { path: ["version"], value: 2 },
   { path: ["version"], value: "2" },
   { path: ["id"], value: "Cliente_invalido" },
   { path: ["name"], value: "  " },
@@ -83,6 +84,8 @@ const invalidFields: { path: (string | number)[]; value: unknown }[] = [
   { path: ["scheduling", "serviceQuestion"], value: "source" },
   { path: ["scheduling", "hours", "monday"], value: [] },
   { path: ["ai", "enabled"], value: "true" },
+  { path: ["ai", "dataMode"], value: "real" },
+  { path: ["ai", "dataMode"], value: true },
   { path: ["ai", "knowledge", 0, "topic"], value: "  " },
   { path: ["ai", "knowledge", 0, "text"], value: "" },
   {
@@ -116,6 +119,13 @@ const invalidFields: { path: (string | number)[]; value: unknown }[] = [
   { path: ["apiKey"], value: "SEGREDO_FICTICIO" },
   { path: ["crm", "settings", "token"], value: "SEGREDO_FICTICIO" },
 ];
+
+test("synthetic data indication is explicit, optional and preserved", () => {
+  const config = change(["ai", "dataMode"], "synthetic");
+  expect(clientConfigSchema.parse(config).ai?.dataMode).toBe("synthetic");
+  delete config.ai?.dataMode;
+  expect(clientConfigSchema.parse(config).ai?.dataMode).toBeUndefined();
+});
 
 test.each(invalidFields)("rejects invalid field $path", ({ path, value }) => {
   expect(clientConfigSchema.safeParse(change(path, value)).success).toBe(false);
@@ -343,7 +353,7 @@ test("fails for missing or empty client directories", () => {
   }
 });
 
-test("all clients/*/config.json in the repository match version 2", () => {
+test("all clients/*/config.json in the repository match version 3", () => {
   const messages: string[] = [];
   expect(
     checkClientDirectory("clients", (m) => messages.push(m)),

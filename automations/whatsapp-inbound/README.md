@@ -53,7 +53,7 @@ de **Burst event**. O `event` segue o formato de [docs/arquitetura/whatsapp.md](
   lista, com o `replyId` da última; senão `text`;
 - `receivedAt`: a hora da última mensagem.
 
-A conversa (T028) parte daqui.
+O nó **Lead conversation** chama `leadConversation` por Execute Workflow, um item por chamada. **Conversation result** registra falhas sem payload ou dados pessoais. A entrada e a conversa não persistem dados de execução, inclusive erros e testes manuais.
 
 ## Tabelas
 
@@ -95,6 +95,7 @@ O aviso por e-mail à agência fica para a T027.
 | `whatsapp_unknown_client` | Número sem cliente ativo; traz `phoneNumberId` e `reason` do loader. |
 | `client_configs_invalid` | Pastas de `clients/` com config ilegível. |
 | `whatsapp_team_reply` | A equipe respondeu pelo app; o lead foi pausado. Traz `clientId`. |
+| `conversation_call_failed` | A conversa recusou o evento ou falhou; sem payload no log. |
 | `whatsapp_paused_lead` | Rajada descartada porque o lead está pausado. Traz `clientId`. |
 
 ## Limites conhecidos
@@ -113,21 +114,19 @@ O aviso por e-mail à agência fica para a T027.
 1. No n8n, criar a credencial **Crypto** com o nome `WhatsApp App Secret` e o App Secret do app
    da Meta no campo **Hmac Secret**. No n8n local ela já existe, com o valor `PREENCHER`.
 2. Importar e publicar. Na raiz do repositório, com o n8n ligado, estes comandos copiam o JSON
-   para o container, importam (a importação despublica), publicam e reiniciam o n8n
+   para o container e importam (a importação despublica) o workflow no n8n
    ([comandos da CLI](../../infra/n8n/README.md#7-comandos-da-cli-do-n8n)):
 
    ```powershell
    docker compose --env-file .env -f infra/n8n/compose.yaml cp automations/whatsapp-inbound/workflow.json n8n:/tmp/whatsapp-inbound.json
    docker compose --env-file .env -f infra/n8n/compose.yaml exec -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n import:workflow --input=/tmp/whatsapp-inbound.json
-   docker compose --env-file .env -f infra/n8n/compose.yaml exec -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n publish:workflow --id=waInboundWebhook
-   docker compose --env-file .env -f infra/n8n/compose.yaml restart n8n
    ```
 
-   O `publish:workflow` precisa responder "Publishing workflow with ID: waInboundWebhook". Sem
-   essa linha, publicar de novo antes de reiniciar.
+   Abrir o workflow no editor, conferir as alterações e clicar em **Publish**.
+   Após reimportação, usar o editor para publicar: a CLI pode conservar uma versão ativa anterior (T045).
 3. O JSON não leva credenciais (D022): no editor, selecionar `WhatsApp App Secret` nos nós
    **Derive verify token (HMAC)** e **Compute signature**, salvar e publicar de novo.
-4. As tabelas são criadas sozinhas na primeira mensagem. O loader precisa estar publicado.
+4. As tabelas são criadas sozinhas na primeira mensagem. O loader, `leadConversation` e seus conectores precisam estar publicados.
 
 ## Ligar o app de teste da Meta
 

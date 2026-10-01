@@ -75,7 +75,7 @@ function isTimeZone(value: string): boolean {
 
 export const clientConfigSchema = z
   .strictObject({
-    version: z.literal(2),
+    version: z.literal(3),
     id: identifier.regex(/^_?[a-z0-9]+(?:-[a-z0-9]+)*$/),
     name: nonBlank,
     active: z.boolean(),
@@ -102,6 +102,7 @@ export const clientConfigSchema = z
     ai: z
       .strictObject({
         enabled: z.boolean(),
+        dataMode: z.literal("synthetic").optional(),
         knowledge: z
           .array(z.strictObject({ topic: nonBlank, text: nonBlank }))
           .refine(

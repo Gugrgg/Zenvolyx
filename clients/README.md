@@ -16,14 +16,14 @@ clients/
     └── README.md     # conectores, checklist de ativação e particularidades
 ```
 
-## config.json (versão 2)
+## config.json (versão 3)
 
 Em JSON, porque o n8n lê sem biblioteca extra. Chaves em inglês; textos para o lead em português.
 Exemplo completo: [`_template/config.json`](_template/config.json).
 
 | Campo | Obrigatório | Conteúdo |
 |-------|-------------|----------|
-| `version` | sim | Versão do formato: `2`. |
+| `version` | sim | Versão do formato: `3`. |
 | `id` | sim | Igual ao nome da pasta. |
 | `name` | sim | Nome do negócio, como aparece nas mensagens. |
 | `timezone` | sim | Fuso do cliente no padrão IANA (ex.: `America/Sao_Paulo`), usado em horários e datas. |
@@ -35,7 +35,7 @@ Exemplo completo: [`_template/config.json`](_template/config.json).
 | `scheduling` | com `calendar` | Regras de horário: `durationMinutes`, `minNoticeHours` (antecedência mínima), `daysAhead` (até quantos dias à frente), `hours` (chaves `mon` a `sun`, cada uma com faixas `"HH:MM-HH:MM"`; dia ausente é dia fechado) e, opcional, `serviceQuestion` (pergunta `choice` cuja resposta vira o serviço do evento). |
 | `qualification.questions` | sim | Perguntas, na ordem em que são feitas: `id`, `text`, `type` (`text`, `choice` ou `number`) e, em `choice`, `options` com `id` e `label`: até 10 opções, `label` com até 20 caracteres (limites de botões e listas do WhatsApp). |
 | `qualification.rules` | sim | Condições para o lead ser qualificado; todas precisam valer, e lista vazia qualifica todos. Em `choice`: `{ "question": "service", "in": ["evaluation"] }`. Em `number`: `min` e/ou `max`. Pergunta `text` não entra em regra. |
-| `ai` | não | IA na conversa (D019): `enabled` (liga ou desliga) e `knowledge`, lista de `{ "topic", "text" }` com informações públicas do negócio que a IA pode usar para tirar dúvidas, até 6.000 caracteres no total. Sem `ai`, a conversa segue só com botões; detalhes em [integrations/ai](../integrations/ai/README.md). |
+| `ai` | não | IA na conversa (D019): `enabled` (liga ou desliga) e `knowledge`, lista de `{ "topic", "text" }` com informações públicas do negócio que a IA pode usar para tirar dúvidas, até 6.000 caracteres no total. Gemini exige também `dataMode: "synthetic"`, permitido somente para dados inteiramente fictícios (D031). Sem essa indicação, com `enabled: false` ou sem `ai`, a conversa segue sem IA; detalhes em [integrations/ai](../integrations/ai/README.md). |
 | `messages` | sim | Textos fixos: `welcome` (primeira resposta), `handoff` (ao chamar a equipe), `failure` (quando algo falha), `urgent` (urgência: resposta fixa e encaminhamento à equipe), `notQualified` (lead fora das regras), `chooseSlot` (antes da lista de horários), `noSlots` (sem horário livre), `slotTaken` (horário ocupado entre listagem e reserva), `booked` (confirmação; `{slot}` vira o horário marcado) e `stopped` (depois do pedido para parar). |
 
 Regras do conteúdo:
@@ -74,7 +74,7 @@ mensagem seguinte, sem reiniciar o n8n.
 ## Validação automática
 
 `npm run check:clients` valida todas as `clients/*/config.json`, inclusive modelos
-e clientes inativos. O schema Zod da versão 2 fica em
+e clientes inativos. O schema Zod da versão 3 fica em
 [scripts/client-config-schema.ts](../scripts/client-config-schema.ts); o comando
 termina com código 1 se houver problema, indicando arquivo e campo sem imprimir valores.
 

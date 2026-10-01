@@ -60,8 +60,8 @@ export function prepareConversation(
   now: string,
 ): Context;
 export function markReadRequest(context: Context): Request;
+export function aiRequest(context: Context): Request | null;
 export function resolveConversation(
   context: Context,
   interpretation?: unknown,
 ): Plan;
-export function safeLog(code: string, clientId: string): Request;

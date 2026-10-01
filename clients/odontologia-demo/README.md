@@ -21,7 +21,7 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 ## Conectores
 
 - IA da demo: [Gemini gratuito](../../integrations/ai/gemini/README.md), somente com
-  mensagens fictícias e `dataMode: "synthetic"` (D030). Não usar dados de pacientes reais.
+  mensagens fictícias e `ai.dataMode: "synthetic"` na config (D030/D031). O campo já está preenchido, mas `ai.enabled` permanece `false` até a base administrativa da T038 ficar pronta. Não usar dados de pacientes reais.
 
 - CRM: `google-sheets`, com a planilha `Leads` da demo compartilhada com a conta de serviço (T021).
 - Agenda: `google-calendar`, com a agenda de demonstração compartilhada com a conta de serviço (T040).

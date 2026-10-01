@@ -1,14 +1,15 @@
-# Conversa com leads (T028 em andamento)
+# Conversa com leads (T028)
 
 Máquina de estados sobre uma Data table, com perguntas da config, regras de
 qualificação, CRM, mensagens do WhatsApp e pausa de 24 horas. ID `leadConversation`.
 O arquivo `conversation.js` contém as funções puras embutidas nos nós Code;
 `conversation.d.ts` descreve os contratos para os testes.
 
-**Rascunho, ainda não publicado nem ligado à entrada.** A ativação da IA aguarda a
-confirmação do formato que autoriza dados fictícios na configuração do cliente.
-O nó Prepare mantém `needsAI: false` enquanto essa decisão estiver pendente.
-Os testes da interpretação usam respostas simuladas; não há chamadas pagas.
+Ligada à saída **Burst event** da entrada do WhatsApp. Gemini é chamado somente
+com `ai.enabled: true` e `ai.dataMode: "synthetic"` na config versão 3 (D031).
+A indicação não anonimiza texto: usar exclusivamente na demo com dados fictícios.
+Sem ela, o fluxo segue com botões e comandos explícitos, sem chamada de IA nem
+fallback pago. A base administrativa da clínica continua pendente da T038.
 
 ## Entrada e estado
 
@@ -28,6 +29,14 @@ Estado é separado por cliente e lead. Estado inválido ou duplicado encaminha �
 equipe; uma falha de leitura/gravação interrompe o envio. O fluxo confere novamente
 `whatsapp_lead_pauses` antes dos efeitos, para respeitar uma pausa iniciada enquanto
 a mensagem era processada. A pausa usa a tabela existente e as regras da D028.
+
+`lead_conversation_turns` ordena execuções por cliente/lead, pelo ID crescente
+da reserva. Guarda apenas `clientId`, `leadId` e `owner` (ID técnico da execução).
+Uma execução espera em memória até 10 minutos e libera sua reserva ao concluir,
+inclusive nas falhas tratadas. Outros leads seguem independentemente. Após uma
+interrupção abrupta, a reserva é ignorada depois de 30 minutos e removida na
+limpeza diária. A pausa é conferida novamente ao assumir a vez. Não é uma fila
+durável: reiniciar o n8n pode perder mensagens em processamento (limite da demo).
 
 ## Comportamento
 
@@ -52,8 +61,20 @@ a mensagem era processada. A pausa usa a tabela existente e as regras da D028.
 
 O nó **Report** concentra logs com evento, código e clientId; sem BSUID, telefone,
 nome ou texto. A T027 acrescentará o aviso. Persistência de execuções, inclusive
-erros e manuais, permanece desligada. A entrada também precisa desse ajuste ao
-ser conectada na conclusão da T028.
+erros e manuais, permanece desligada. A entrada também mantém essas opções desligadas.
+
+## Instalação e publicação
+
+1. Importar `workflow.json` e abrir **Lead conversation** no editor do n8n.
+2. Publicar os conectores `whatsappCloudApi`, `crmUpsertRouter1` e
+   `aiGeminiDemo0001`, conforme os respectivos READMEs.
+3. Clicar em **Publish** no editor da conversa; depois importar e publicar a
+   entrada do WhatsApp preservando suas referências à credencial Crypto.
+4. Exportar os dois workflows, remover credenciais e metadados da instância
+   (D022) e executar `npm run check:workflows`.
+
+As tabelas são criadas automaticamente. Após reimportação, publicar pelo editor
+e verificar a versão ativa (T045). Não habilitar faturamento para estes testes.
 
 ## Verificação
 
@@ -61,7 +82,8 @@ ser conectada na conclusão da T028.
 regras, fallback, estados encerrados e minimização de dados, sem rede.
 
 Ensaio em n8n 2.40.5 descartável, acessível somente em loopback, com tabelas reais
-e substituição dos nós Execute Workflow por respostas fictícias:
+e conectores substituídos por respostas fictícias; um workflow chamador usa
+Execute Workflow para exercitar a conversa como sub-workflow:
 
 1. Enviar a fixture; conferir CRM `talking`, boas-vindas e lista.
 2. Enviar `procedure:implant` e depois `patient:new`; conferir respostas persistidas,
@@ -74,5 +96,15 @@ e substituição dos nós Execute Workflow por respostas fictícias:
 6. Inserir estados fictícios com 40 dias e 1 dia; executar a limpeza e conferir
    que apenas o recente permanece.
 
+7. Atrasar a primeira interpretação e enviar outra resposta do mesmo lead:
+   conferir perguntas/respostas em sequência, sem sobrescrita. Um segundo lead
+   deve continuar durante a espera. Confirmar que pausas e falhas liberam a vez.
+8. Tirar `dataMode` ou desligar `enabled`: nenhum nó de IA pode executar.
+
+Validação em 2026-10-01: 16 requisições funcionais e 8 adicionais de concorrência,
+autorização da IA e pausa passaram, além da limpeza por idade.
+Os dois workflows foram publicados no n8n local pelo editor, com a versão ativa
+conferida contra o export. Uma chamada Execute Workflow confirmou a validação
+da entrada publicada, sem alcançar conectores; o verificador foi arquivado.
 Sem Meta, Google Sheets ou Gemini reais neste ensaio. Teste integrado pelo celular
 fica na T030, com dados fictícios e os recursos configurados pelo dono.

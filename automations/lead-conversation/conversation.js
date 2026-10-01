@@ -48,6 +48,7 @@ function validQuestion(question) {
 function validConfig(config) {
   if (
     !isObject(config) ||
+    config.version !== 3 ||
     !identifier(config.id) ||
     config.active !== true ||
     !text(config.name, 200) ||
@@ -302,6 +303,26 @@ export function prepareConversation(input, rows, now) {
   };
 }
 
+export function aiRequest(context) {
+  const { config, event, question } = context;
+  if (
+    context.stateError ||
+    context.directAnswer !== null ||
+    event.type === "unsupported" ||
+    config.ai?.enabled !== true ||
+    config.ai.dataMode !== "synthetic"
+  )
+    return null;
+  return {
+    action: "interpret",
+    clientId: config.id,
+    dataMode: "synthetic",
+    business: { name: config.name, knowledge: config.ai.knowledge },
+    question,
+    message: event.text,
+  };
+}
+
 function whatsapp(context, action, fields) {
   return {
     action,
@@ -543,8 +564,4 @@ export function resolveConversation(context, interpretation = null) {
   } else if (!plan.readyForScheduling)
     handoff("handoff", config.messages.handoff);
   return plan;
-}
-
-export function safeLog(code, clientId) {
-  return { event: "conversation_error", clientId, code };
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
+  aiRequest,
   type Context,
   markReadRequest,
   type Plan,
@@ -77,6 +78,55 @@ function choose(previous: Plan, id: string, label: string) {
   );
 }
 const first = () => resolveConversation(prepare());
+
+describe("autorização da IA na demo", () => {
+  const synthetic = () =>
+    prepare(undefined, (i) => {
+      i.config.ai = { enabled: true, dataMode: "synthetic", knowledge: [] };
+    });
+  test("exige enabled e indicação explícita de dados fictícios", () => {
+    const ctx = synthetic();
+    expect(aiRequest(ctx)).toMatchObject({
+      action: "interpret",
+      dataMode: "synthetic",
+    });
+    if (!ctx.config.ai) throw new Error("Config AI ausente");
+    delete ctx.config.ai.dataMode;
+    expect(aiRequest(ctx)).toBeNull();
+    ctx.config.ai.dataMode = "synthetic";
+    ctx.config.ai.enabled = false;
+    expect(aiRequest(ctx)).toBeNull();
+    delete ctx.config.ai;
+    expect(aiRequest(ctx)).toBeNull();
+  });
+  test("envia somente o contrato administrativo sem identidade nem histórico", () => {
+    const ctx = synthetic();
+    expect(aiRequest(ctx)).toEqual({
+      action: "interpret",
+      clientId: ctx.config.id,
+      dataMode: "synthetic",
+      business: { name: ctx.config.name, knowledge: [] },
+      question: ctx.question,
+      message: ctx.event.text,
+    });
+  });
+  test("botão isolado, mídia e estado inválido não chamam IA", () => {
+    const ctx = synthetic();
+    ctx.directAnswer = "implant";
+    expect(aiRequest(ctx)).toBeNull();
+    ctx.directAnswer = null;
+    ctx.event.type = "unsupported";
+    expect(aiRequest(ctx)).toBeNull();
+    ctx.event.type = "text";
+    ctx.stateError = true;
+    expect(aiRequest(ctx)).toBeNull();
+  });
+  test("não aceita uma config antiga no ponto de entrada", () => {
+    const request = input();
+    Object.assign(request.config, { version: 2 });
+    expect(validInput(request)).toBe(false);
+  });
+});
 
 describe("conversa guiada", () => {
   test("primeiro contato cria CRM talking e uma lista com boas-vindas", () => {
@@ -381,6 +431,31 @@ describe("estado, isolamento e dados", () => {
 });
 
 describe("workflow n8n", () => {
+  test("entrada chama a conversa após juntar a rajada e não persiste execuções", () => {
+    const inbound = JSON.parse(
+      readFileSync(
+        new URL(
+          "../automations/whatsapp-inbound/workflow.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    expect(inbound.connections["Burst event"].main[0][0].node).toBe(
+      "Lead conversation",
+    );
+    expect(
+      inbound.nodes.find(
+        (n: { name: string }) => n.name === "Lead conversation",
+      ).parameters.workflowId.value,
+    ).toBe("leadConversation");
+    expect(inbound.settings).toMatchObject({
+      saveDataErrorExecution: "none",
+      saveDataSuccessExecution: "none",
+      saveManualExecutions: false,
+      saveExecutionProgress: false,
+    });
+  });
   test("funções executadas no n8n são as mesmas testadas", () => {
     const source = readFileSync(
       new URL(

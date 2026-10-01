@@ -913,6 +913,34 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [220, 1050]
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000099",
+      "name": "Lead conversation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [3080, 600],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "leadConversation",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000100",
+      "name": "Conversation result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 600],
+      "parameters": {
+        "jsCode": "return $input.all().map(item=>{if(item.json.ok!==true)console.log(JSON.stringify({event:'conversation_call_failed'}));return {json:{ok:item.json.ok===true}};});"
+      }
     }
   ],
   "connections": {
@@ -1212,10 +1240,36 @@
           }
         ]
       ]
+    },
+    "Burst event": {
+      "main": [
+        [
+          {
+            "node": "Lead conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead conversation": {
+      "main": [
+        [
+          {
+            "node": "Conversation result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
   },
   "active": true
 }

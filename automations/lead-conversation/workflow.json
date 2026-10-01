@@ -19,7 +19,7 @@
       "typeVersion": 2,
       "position": [220, 0],
       "parameters": {
-        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst input=$input.first().json; return [{json: {valid: $input.all().length===1 && validInput(input), input}}];"
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    config.version !== 3 ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction aiRequest(context) {\n  const { config, event, question } = context;\n  if (\n    context.stateError ||\n    context.directAnswer !== null ||\n    event.type === \"unsupported\" ||\n    config.ai?.enabled !== true ||\n    config.ai.dataMode !== \"synthetic\"\n  )\n    return null;\n  return {\n    action: \"interpret\",\n    clientId: config.id,\n    dataMode: \"synthetic\",\n    business: { name: config.name, knowledge: config.ai.knowledge },\n    question,\n    message: event.text,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nconst input=$input.first().json; return [{json: {valid: $input.all().length===1 && validInput(input), input}}];"
       }
     },
     {
@@ -240,7 +240,7 @@
       "typeVersion": 2,
       "position": [1760, 0],
       "parameters": {
-        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst context=prepareConversation($('Validate').first().json.input, $('Read state').all().map(i=>i.json),new Date().toISOString()); context.needsAI=false; context.logs=[]; context.markRead=markReadRequest(context); return [{json:context}];"
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    config.version !== 3 ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction aiRequest(context) {\n  const { config, event, question } = context;\n  if (\n    context.stateError ||\n    context.directAnswer !== null ||\n    event.type === \"unsupported\" ||\n    config.ai?.enabled !== true ||\n    config.ai.dataMode !== \"synthetic\"\n  )\n    return null;\n  return {\n    action: \"interpret\",\n    clientId: config.id,\n    dataMode: \"synthetic\",\n    business: { name: config.name, knowledge: config.ai.knowledge },\n    question,\n    message: event.text,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nconst context=prepareConversation($('Validate').first().json.input, $('Read state').all().map(i=>i.json),new Date().toISOString()); context.aiRequest=aiRequest(context); context.needsAI=context.aiRequest!==null; context.logs=[]; context.markRead=markReadRequest(context); return [{json:context}];"
       }
     },
     {
@@ -349,7 +349,7 @@
       "typeVersion": 2,
       "position": [3300, 0],
       "parameters": {
-        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst context=$('After mark read').first().json;const plan=resolveConversation(context, context.needsAI?$input.first().json:null);plan.logs.unshift(...context.logs);return [{json:plan}];"
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    config.version !== 3 ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction aiRequest(context) {\n  const { config, event, question } = context;\n  if (\n    context.stateError ||\n    context.directAnswer !== null ||\n    event.type === \"unsupported\" ||\n    config.ai?.enabled !== true ||\n    config.ai.dataMode !== \"synthetic\"\n  )\n    return null;\n  return {\n    action: \"interpret\",\n    clientId: config.id,\n    dataMode: \"synthetic\",\n    business: { name: config.name, knowledge: config.ai.knowledge },\n    question,\n    message: event.text,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nconst context=$('After mark read').first().json;const plan=resolveConversation(context, context.needsAI?$input.first().json:null);plan.logs.unshift(...context.logs);return [{json:plan}];"
       }
     },
     {
@@ -1084,7 +1084,7 @@
       "typeVersion": 2,
       "position": [8800, 0],
       "parameters": {
-        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst plan=$('Failed pause request').first().json.failedPlan;if($json.error)plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'pause_write_failed'});return [{json:{failedPlan:plan,request:crmRequest($('After mark read').first().json,plan.state)}}];"
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    config.version !== 3 ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction aiRequest(context) {\n  const { config, event, question } = context;\n  if (\n    context.stateError ||\n    context.directAnswer !== null ||\n    event.type === \"unsupported\" ||\n    config.ai?.enabled !== true ||\n    config.ai.dataMode !== \"synthetic\"\n  )\n    return null;\n  return {\n    action: \"interpret\",\n    clientId: config.id,\n    dataMode: \"synthetic\",\n    business: { name: config.name, knowledge: config.ai.knowledge },\n    question,\n    message: event.text,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nconst plan=$('Failed pause request').first().json.failedPlan;if($json.error)plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'pause_write_failed'});return [{json:{failedPlan:plan,request:crmRequest($('After mark read').first().json,plan.state)}}];"
       }
     },
     {
@@ -1238,6 +1238,491 @@
       "parameters": {
         "jsCode": "const failed=$json.error||$('Ensure state table daily').first().json.error;return [{json:{ok:!failed,logs:failed?[{event:'conversation_error',code:'cleanup_failed'}]:[]}}];"
       }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000052",
+      "name": "Ensure turn table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1100, -400],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "lead_conversation_turns",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "owner",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000053",
+      "name": "Turn request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -400],
+      "parameters": {
+        "jsCode": "const {event,config}=$('Validate').first().json.input;return [{json:{clientId:config.id,leadId:event.leadId,owner:$execution.id}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000054",
+      "name": "Claim turn",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1540, -400],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversation_turns",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadId": "={{ $json.leadId }}",
+            "owner": "={{ $json.owner }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadId",
+              "displayName": "leadId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "owner",
+              "displayName": "owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000055",
+      "name": "Claim recorded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1760, -400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Claim-recorded",
+              "leftValue": "={{ !$json.error && Number.isInteger($json.id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000056",
+      "name": "Read turns",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1980, -400],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversation_turns",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate').first().json.input.config.id }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate').first().json.input.event.leadId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000057",
+      "name": "Turn status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, -400],
+      "parameters": {
+        "jsCode": "const mine=$('Claim turn').first().json;const rows=$input.all().map(i=>i.json);const failed=rows.some(r=>r.error);const live=rows.filter(r=>Number.isInteger(r.id)&&Date.parse(r.createdAt)>Date.now()-30*60000).sort((a,b)=>a.id-b.id);const expired=Date.now()-Date.parse(mine.createdAt)>10*60000;return [{json:{acquired:!failed&&live[0]?.id===mine.id,wait:!failed&&!expired,ok:false,logs:[{event:'conversation_error',clientId:mine.clientId,code:failed?'turn_read_failed':'turn_timeout'}]}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000058",
+      "name": "Turn acquired",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2420, -400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Turn-acquired",
+              "leftValue": "={{ $json.acquired }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000059",
+      "name": "Wait for turn",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2640, -550],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Wait-for-turn",
+              "leftValue": "={{ $json.wait }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000060",
+      "name": "Wait turn",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2860, -550],
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000061",
+      "name": "Read initial pause",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [2640, -350],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate').first().json.input.config.id }}"
+            },
+            {
+              "keyName": "pausedUntil",
+              "condition": "gt",
+              "keyValue": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000062",
+      "name": "Initial pause status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, -350],
+      "parameters": {
+        "jsCode": "const {event,config}=$('Validate').first().json.input;const rows=$input.all().map(i=>i.json);const failed=rows.some(r=>r.error);const paused=rows.some(r=>r.leadKey===event.leadId||(event.phone!==null&&r.leadKey==='tel:'+event.phone));return [{json:{allowed:!failed&&!paused,ok:!failed,skipped:paused,logs:failed?[{event:'conversation_error',clientId:config.id,code:'pause_read_failed'}]:[]}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000063",
+      "name": "Start turn",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3080, -350],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Start-turn",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000064",
+      "name": "Prepare result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [9240, 350],
+      "parameters": {
+        "jsCode": "const plan=$input.first().json;let claimId=null;try{const claim=$('Claim turn').first().json;if(Number.isInteger(claim.id))claimId=claim.id;}catch{/* Caminhos de validação e limpeza não criam reserva. */}return [{json:{plan,claimId}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000065",
+      "name": "Release needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [9460, 350],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Release-needed",
+              "leftValue": "={{ $json.claimId !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000066",
+      "name": "Release turn",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [9680, 350],
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversation_turns",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.claimId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000067",
+      "name": "Released result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [9900, 350],
+      "parameters": {
+        "jsCode": "const p=$('Prepare result').first().json;if($json.error){p.plan.ok=false;p.plan.logs??=[];p.plan.logs.push({event:'conversation_error',code:'turn_release_failed'});}return [{json:p.plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000068",
+      "name": "No claim result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [9680, 550],
+      "parameters": {
+        "jsCode": "return [{json:$json.plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000069",
+      "name": "Ensure turn table daily",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [880, 700],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "lead_conversation_turns",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "owner",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000070",
+      "name": "Delete stale turns",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1100, 700],
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversation_turns",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "createdAt",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus({minutes:30}).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000071",
+      "name": "Turn cleanup result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 700],
+      "parameters": {
+        "jsCode": "const failed=$json.error||$('Ensure turn table daily').first().json.error;return [{json:{ok:!failed,logs:failed?[{event:'conversation_error',code:'turn_cleanup_failed'}]:[]}}];"
+      }
     }
   ],
   "connections": {
@@ -1307,7 +1792,7 @@
       "main": [
         [
           {
-            "node": "Read state",
+            "node": "Ensure turn table",
             "type": "main",
             "index": 0
           }
@@ -1398,7 +1883,7 @@
       "main": [
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1489,7 +1974,7 @@
         ],
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1678,7 +2163,7 @@
         ],
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1722,7 +2207,7 @@
       "main": [
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1806,7 +2291,7 @@
       "main": [
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1817,7 +2302,7 @@
       "main": [
         [
           {
-            "node": "Report",
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1829,6 +2314,11 @@
         [
           {
             "node": "Ensure state table daily",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ensure turn table daily",
             "type": "main",
             "index": 0
           }
@@ -1861,7 +2351,262 @@
       "main": [
         [
           {
+            "node": "Prepare result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure turn table": {
+      "main": [
+        [
+          {
+            "node": "Turn request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turn request": {
+      "main": [
+        [
+          {
+            "node": "Claim turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim turn": {
+      "main": [
+        [
+          {
+            "node": "Claim recorded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim recorded": {
+      "main": [
+        [
+          {
+            "node": "Read turns",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read turns": {
+      "main": [
+        [
+          {
+            "node": "Turn status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turn status": {
+      "main": [
+        [
+          {
+            "node": "Turn acquired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turn acquired": {
+      "main": [
+        [
+          {
+            "node": "Read initial pause",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for turn": {
+      "main": [
+        [
+          {
+            "node": "Wait turn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait turn": {
+      "main": [
+        [
+          {
+            "node": "Read turns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read initial pause": {
+      "main": [
+        [
+          {
+            "node": "Initial pause status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initial pause status": {
+      "main": [
+        [
+          {
+            "node": "Start turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start turn": {
+      "main": [
+        [
+          {
+            "node": "Read state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare result": {
+      "main": [
+        [
+          {
+            "node": "Release needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release needed": {
+      "main": [
+        [
+          {
+            "node": "Release turn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No claim result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release turn": {
+      "main": [
+        [
+          {
+            "node": "Released result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Released result": {
+      "main": [
+        [
+          {
             "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No claim result": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure turn table daily": {
+      "main": [
+        [
+          {
+            "node": "Delete stale turns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete stale turns": {
+      "main": [
+        [
+          {
+            "node": "Turn cleanup result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turn cleanup result": {
+      "main": [
+        [
+          {
+            "node": "Prepare result",
             "type": "main",
             "index": 0
           }
@@ -1876,5 +2621,5 @@
     "saveManualExecutions": false,
     "saveExecutionProgress": false
   },
-  "active": false
+  "active": true
 }

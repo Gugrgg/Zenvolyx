@@ -147,7 +147,13 @@ describe("workflow", () => {
   test("keeps a fixed ID, publishes and has no credential in the export", () => {
     expect(workflow.id).toMatch(/^[A-Za-z0-9]{16}$/);
     expect(workflow.active).toBe(true);
-    expect(workflow.settings).toEqual({ executionOrder: "v1" });
+    expect(workflow.settings).toEqual({
+      executionOrder: "v1",
+      saveDataErrorExecution: "none",
+      saveDataSuccessExecution: "none",
+      saveManualExecutions: false,
+      saveExecutionProgress: false,
+    });
     expect(workflow.nodes.every((item) => item.credentials === undefined)).toBe(
       true,
     );
