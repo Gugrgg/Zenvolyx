@@ -33,8 +33,6 @@ Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
   Depende: T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
 - [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
   Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
-- [ ] T028 Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe, urgência e pedido para parar, com o estado em tabela (D020); erros e chamadas da equipe em log sem dados pessoais até a T027
-  Depende: T016, T018, T019, T021, T024, T039 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), automations/whatsapp-inbound/README.md (Saída, Pausa), DECISIONS.md (D020, D026, D028)
 - [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
   Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
 - [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
@@ -113,7 +111,10 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-Nenhuma.
+- [ ] T028 [CODEX] Criar o fluxo `automations/lead-conversation/`: perguntas, IA, regras, CRM, equipe, urgência e pedido para parar, com o estado em tabela (D020); erros e chamadas da equipe em log sem dados pessoais até a T027
+  Depende: T016, T018, T019, T021, T024, T039 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa), automations/whatsapp-inbound/README.md (Saída, Pausa), DECISIONS.md (D020, D026, D028)
+  Parcial: máquina de estados e workflow em rascunho; 553 testes (43 da conversa), lint, tipos, 11 workflows e 3 configs passaram. Ensaio em n8n descartável com tabelas reais e conectores simulados: 16 requisições verificadas, mais limpeza de registro antigo preservando o recente. Nenhuma API real chamada.
+  Aguarda dono: aprovar indicação explícita `ai.dataMode: "synthetic"` na config, com validação e nova versão do formato, antes de habilitar Gemini (D030). Pergunta enviada no chat; não presumir aprovação. Nó Prepare permanece com needsAI false. Falta ligar entrada, publicar, exportar e fazer merge final; branch codex/T028-lead-conversation.
 
 ## Concluído
 
@@ -244,6 +245,23 @@ Próxima tarefa: T032
 Observações:
 - ...
 -->
+
+### Handoff T028 (em andamento; aguarda confirmação do formato da config)
+Implementado:
+- automations/lead-conversation/conversation.js e workflow.json (leadConversation), ainda inativo e sem ligação à entrada. Funções puras embutidas nos Code nodes e verificadas pelos testes.
+- Estado por cliente/BSUID em lead_conversations, perguntas/listas/botões, regras, CRM, pausa, urgência/parada, encaminhamento, fallback e limpeza de 30 dias. Falhas de envio pausam e atualizam o CRM; logs centralizados no Report, sem dados pessoais; execuções não persistidas.
+- 553 testes passaram (43 novos); lint/tipos/validadores passaram. 16 requisições no n8n 2.40.5 isolado, com Data tables reais e conectores substituídos por respostas fictícias; limpeza apagou estado de 40 dias e preservou o de 1 dia. Ambiente descartável removido. Sem API paga ou mensagens externas.
+Arquivos principais:
+- automations/lead-conversation/README.md, conversation.js, conversation.d.ts, workflow.json
+- tests/lead-conversation.test.ts; tests/fixtures/conversation/input.json
+Próxima tarefa: concluir T028 após resposta do dono
+Observações:
+- Pergunta pendente: acrescentar ai.dataMode synthetic na configuração, com nova versão e validação, ou manter formato e IA desligada. Não foi respondida; não alterar arquitetura por suposição (AGENTS seção 4). Prepare está deliberadamente com needsAI false e sem aiRequest; a integração da IA permanece incompleta, embora as transições tenham testes com saída simulada.
+- Se aprovado: implementar o campo no schema/configs/fixtures/documentação e registrar decisão; preparar chamada interpret somente com ai.enabled e autorização synthetic. Nunca fallback pago. Não preencher a base administrativa da T038 nem ativar clientes reais.
+- Depois: conectar Burst event a leadConversation (Execute Workflow, each); desativar persistência de erros também no workflow pai; ensaiar essa ligação com conectores fictícios; importar/publicar ambos pelo editor, preservar a credencial Crypto da entrada, exportar limpo, atualizar docs e TASKS, commit/merge em dev/main conforme autorizado.
+- O n8n Code não oferece structuredClone neste ambiente; cópia JSON é usada no núcleo. Object.defineProperty não preservou a resposta na serialização do runner; atribuição por objeto novo foi validada no ensaio.
+- Gerador e ensaio temporários fora do repo em %TEMP%/zenvolyx-t028/ (build.mjs, runtime.mjs, verify.mjs, cleanup.mjs). O gerador embute o núcleo; ao editar, regenerar e formatar workflow.json. Scripts de ensaio nunca chamam os conectores reais. Arquivos só com dados fictícios.
+- T029 continuará o estado qualified com readyForScheduling; sem agenda, a equipe assume. Concorrência de duas rajadas do mesmo lead ainda exige conferência antes da publicação final; não tratar o ensaio sequencial como validação de concorrência.
 
 ### Handoff T020
 Concluído:

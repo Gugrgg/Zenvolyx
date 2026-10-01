@@ -1,0 +1,1880 @@
+{
+  "id": "leadConversation",
+  "name": "Lead conversation",
+  "nodes": [
+    {
+      "id": "c0280000-0000-4028-8028-000000000001",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000002",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst input=$input.first().json; return [{json: {valid: $input.all().length===1 && validInput(input), input}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000003",
+      "name": "Valid input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Valid-input",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000004",
+      "name": "Invalid input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400],
+      "parameters": {
+        "jsCode": "return [{json:{ok:false,logs:[{event:'conversation_error',code:'invalid_input'}]}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000005",
+      "name": "Ensure state table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [660, 0],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "lead_conversations",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "stateJson",
+              "type": "string"
+            },
+            {
+              "name": "lastContactAt",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000006",
+      "name": "Ensure pause table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [880, 0],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "whatsapp_lead_pauses",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadKey",
+              "type": "string"
+            },
+            {
+              "name": "pausedUntil",
+              "type": "date"
+            },
+            {
+              "name": "reason",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000007",
+      "name": "Storage ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Storage-ready",
+              "leftValue": "={{ !$json.error && !$('Ensure state table').first().json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000008",
+      "name": "Read state",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1320, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate').first().json.input.config.id }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate').first().json.input.event.leadId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000009",
+      "name": "State read",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1540, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "State-read",
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000010",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 0],
+      "parameters": {
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst context=prepareConversation($('Validate').first().json.input, $('Read state').all().map(i=>i.json),new Date().toISOString()); context.needsAI=false; context.logs=[]; context.markRead=markReadRequest(context); return [{json:context}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000011",
+      "name": "Mark read request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 0],
+      "parameters": {
+        "jsCode": "return [{json:$json.markRead}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000012",
+      "name": "Mark read",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2200, 0],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "whatsappCloudApi",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000013",
+      "name": "After mark read",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 0],
+      "parameters": {
+        "jsCode": "const context=$('Prepare').first().json; if($json.ok!==true)context.logs.push({event:'conversation_error',clientId:context.config.id,code:'mark_read_failed'});return [{json:context}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000014",
+      "name": "Needs AI",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2640, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Needs-AI",
+              "leftValue": "={{ $json.needsAI }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000015",
+      "name": "AI request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, -180],
+      "parameters": {
+        "jsCode": "return [{json:$json.aiRequest}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000016",
+      "name": "Interpret",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [3080, -180],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "aiGeminiDemo0001",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000017",
+      "name": "Resolve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 0],
+      "parameters": {
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst context=$('After mark read').first().json;const plan=resolveConversation(context, context.needsAI?$input.first().json:null);plan.logs.unshift(...context.logs);return [{json:plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000018",
+      "name": "Check pause",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [3520, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "pausedUntil",
+              "condition": "gt",
+              "keyValue": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000019",
+      "name": "Pause status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3740, 0],
+      "parameters": {
+        "jsCode": "const plan=$('Resolve').first().json;const event=$('Validate').first().json.input.event;const rows=$input.all().map(i=>i.json);const failed=rows.some(r=>r.error);const paused=rows.some(r=>r.leadKey===event.leadId || (event.phone!==null&&r.leadKey==='tel:'+event.phone));return [{json:{...plan,allowed:!failed&&!paused,ok:!failed,skipped:paused,logs:[...plan.logs,...(failed?[{event:'conversation_error',clientId:plan.clientId,code:'pause_read_failed'}]:[])]}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000020",
+      "name": "May respond",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3960, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "May-respond",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000021",
+      "name": "Save state",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [4180, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadId": "={{ $json.leadId }}",
+            "stateJson": "={{ JSON.stringify($json.state) }}",
+            "lastContactAt": "={{ $json.state.lastContactAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadId",
+              "displayName": "leadId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "stateJson",
+              "displayName": "stateJson",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastContactAt",
+              "displayName": "lastContactAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000022",
+      "name": "State saved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4400, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "State-saved",
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000023",
+      "name": "Saved plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4620, 0],
+      "parameters": {
+        "jsCode": "return [{json:$('Pause status').first().json}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000024",
+      "name": "Needs pause",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4840, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Needs-pause",
+              "leftValue": "={{ $json.pause !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000025",
+      "name": "Pause request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5060, -180],
+      "parameters": {
+        "jsCode": "return [{json:$json.pause}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000026",
+      "name": "Pause lead",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [5280, -180],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadKey",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadKey }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadKey": "={{ $json.leadKey }}",
+            "pausedUntil": "={{ $json.pausedUntil }}",
+            "reason": "={{ $json.reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadKey",
+              "displayName": "leadKey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pausedUntil",
+              "displayName": "pausedUntil",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000027",
+      "name": "Pause saved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [5500, -180],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Pause-saved",
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000028",
+      "name": "Effects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5720, 0],
+      "parameters": {
+        "jsCode": "return [{json:$('Saved plan').first().json}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000029",
+      "name": "Has CRM changes",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [5940, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Has-CRM-changes",
+              "leftValue": "={{ $json.crm.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000030",
+      "name": "CRM requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6160, -180],
+      "parameters": {
+        "jsCode": "return $json.crm.map(json=>({json}));"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000031",
+      "name": "Update CRM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [6380, -180],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "crmUpsertRouter1",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000032",
+      "name": "After CRM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6600, -180],
+      "parameters": {
+        "jsCode": "const plan=$('Effects').first().json;if($input.all().some(i=>i.json.ok!==true))plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'crm_failed'});return [{json:plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000033",
+      "name": "Delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6820, 0],
+      "parameters": {
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000034",
+      "name": "Has message",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [7040, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Has-message",
+              "leftValue": "={{ $json.outbound !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000035",
+      "name": "Message request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [7260, -180],
+      "parameters": {
+        "jsCode": "return [{json:$json.outbound}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000036",
+      "name": "Send message",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [7480, -180],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "whatsappCloudApi",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000037",
+      "name": "Delivery status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [7700, -180],
+      "parameters": {
+        "jsCode": "const plan=$('Delivery').first().json;const failed=$json.ok!==true;plan.ok=!failed;if(failed){plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'send_failed'});if(!['urgent','stopped'].includes(plan.state.stage))plan.state.stage='with_team';plan.pause??={clientId:plan.clientId,leadKey:plan.leadId,pausedUntil:new Date(Date.now()+86400000).toISOString(),reason:'handoff'};plan.readyForScheduling=false;}return [{json:plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000038",
+      "name": "Delivered",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [7920, -180],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Delivered",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000039",
+      "name": "Save failed delivery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [8140, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadId",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadId": "={{ $json.leadId }}",
+            "stateJson": "={{ JSON.stringify($json.state) }}",
+            "lastContactAt": "={{ $json.state.lastContactAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadId",
+              "displayName": "leadId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "stateJson",
+              "displayName": "stateJson",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastContactAt",
+              "displayName": "lastContactAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000040",
+      "name": "Failed pause request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [8360, 0],
+      "parameters": {
+        "jsCode": "const plan=$('Delivery status').first().json;if($json.error)plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'state_write_failed'});return [{json:{...plan.pause,failedPlan:plan}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000041",
+      "name": "Pause failed delivery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [8580, 0],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "whatsapp_lead_pauses",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "clientId",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId }}"
+            },
+            {
+              "keyName": "leadKey",
+              "condition": "eq",
+              "keyValue": "={{ $json.leadKey }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientId": "={{ $json.clientId }}",
+            "leadKey": "={{ $json.leadKey }}",
+            "pausedUntil": "={{ $json.pausedUntil }}",
+            "reason": "={{ $json.reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "clientId",
+              "displayName": "clientId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "leadKey",
+              "displayName": "leadKey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pausedUntil",
+              "displayName": "pausedUntil",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000042",
+      "name": "Failed delivery CRM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [8800, 0],
+      "parameters": {
+        "jsCode": "// Funções puras, também embutidas nos nós Code do workflow.\nconst DAY = 86_400_000;\nconst STAGES = [\n  \"talking\",\n  \"qualified\",\n  \"not_qualified\",\n  \"scheduled\",\n  \"with_team\",\n  \"urgent\",\n  \"stopped\",\n];\nconst isObject = (value) =>\n  value !== null && typeof value === \"object\" && !Array.isArray(value);\nconst text = (value, max = 4000) =>\n  typeof value === \"string\" && value.trim().length > 0 && value.length <= max;\nconst date = (value) =>\n  typeof value === \"string\" && Number.isFinite(Date.parse(value));\nconst identifier = (value) => text(value, 100) && /^[a-z0-9_-]+$/i.test(value);\nconst normalize = (value) =>\n  value\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim()\n    .toLowerCase();\n\nfunction validQuestion(question) {\n  if (\n    !isObject(question) ||\n    !identifier(question.id) ||\n    !text(question.text, 1000)\n  )\n    return false;\n  if ([\"text\", \"number\"].includes(question.type)) return true;\n  return (\n    question.type === \"choice\" &&\n    Array.isArray(question.options) &&\n    question.options.length > 0 &&\n    question.options.length <= 10 &&\n    question.options.every(\n      (option) =>\n        isObject(option) && identifier(option.id) && text(option.label, 20),\n    ) &&\n    new Set(question.options.map((option) => option.id)).size ===\n      question.options.length\n  );\n}\n\nfunction validConfig(config) {\n  if (\n    !isObject(config) ||\n    !identifier(config.id) ||\n    config.active !== true ||\n    !text(config.name, 200) ||\n    !text(config.timezone, 100)\n  )\n    return false;\n  try {\n    new Intl.DateTimeFormat(\"en\", { timeZone: config.timezone });\n  } catch {\n    return false;\n  }\n  if (\n    !isObject(config.whatsapp) ||\n    !/^\\d+$/.test(config.whatsapp.phoneNumberId) ||\n    !/^[a-z0-9]{16}$/i.test(config.whatsapp.gatewayWorkflowId)\n  )\n    return false;\n  if (\n    !isObject(config.crm) ||\n    config.crm.provider !== \"google-sheets\" ||\n    !text(config.crm.settings?.spreadsheetId, 200)\n  )\n    return false;\n  if (\n    !isObject(config.qualification) ||\n    !Array.isArray(config.qualification.questions) ||\n    !Array.isArray(config.qualification.rules)\n  )\n    return false;\n  const questions = config.qualification.questions;\n  if (\n    questions.length > 30 ||\n    !questions.every(validQuestion) ||\n    new Set(questions.map((q) => q.id)).size !== questions.length\n  )\n    return false;\n  if (\n    !config.qualification.rules.every((rule) => {\n      if (!isObject(rule)) return false;\n      const q = questions.find((q) => q.id === rule.question);\n      if (q?.type === \"choice\")\n        return (\n          Array.isArray(rule.in) &&\n          rule.in.length > 0 &&\n          rule.in.every((id) => q.options.some((o) => o.id === id))\n        );\n      return (\n        q?.type === \"number\" &&\n        (Number.isFinite(rule.min) || Number.isFinite(rule.max)) &&\n        (rule.min === undefined || Number.isFinite(rule.min)) &&\n        (rule.max === undefined || Number.isFinite(rule.max)) &&\n        !(rule.min > rule.max)\n      );\n    })\n  )\n    return false;\n  const messages = [\n    \"welcome\",\n    \"handoff\",\n    \"failure\",\n    \"urgent\",\n    \"notQualified\",\n    \"stopped\",\n  ];\n  return (\n    isObject(config.messages) &&\n    messages.every((key) => text(config.messages[key], 1000))\n  );\n}\n\nfunction validInput(input) {\n  if (!isObject(input) || !validConfig(input.config) || !isObject(input.event))\n    return false;\n  const e = input.event;\n  return (\n    e.clientId === input.config.id &&\n    e.channel === \"whatsapp\" &&\n    text(e.leadId, 200) &&\n    (e.phone === null ||\n      (typeof e.phone === \"string\" && /^\\d{5,20}$/.test(e.phone))) &&\n    (e.name === null || text(e.name, 200)) &&\n    Array.isArray(e.messageIds) &&\n    e.messageIds.length > 0 &&\n    e.messageIds.length <= 100 &&\n    e.messageIds.every((id) => text(id, 300)) &&\n    date(e.receivedAt) &&\n    [\"text\", \"reply\", \"unsupported\"].includes(e.type) &&\n    (e.type === \"unsupported\" || text(e.text, 8000)) &&\n    (e.type !== \"reply\" || text(e.replyId, 200))\n  );\n}\n\nfunction validAnswer(question, answer) {\n  if (question?.type === \"choice\")\n    return question.options.some((o) => o.id === answer);\n  if (question?.type === \"number\") return Number.isFinite(answer);\n  return question?.type === \"text\" && text(answer, 400);\n}\n\nfunction freshState(now) {\n  return {\n    stage: \"talking\",\n    questionIndex: 0,\n    answers: {},\n    failures: 0,\n    offeredSlots: [],\n    declined: false,\n    appointment: null,\n    firstContactAt: now,\n    lastContactAt: now,\n  };\n}\n\nfunction validSlot(slot) {\n  return (\n    isObject(slot) &&\n    date(slot.start) &&\n    date(slot.end) &&\n    Date.parse(slot.start) < Date.parse(slot.end) &&\n    text(slot.label, 200)\n  );\n}\n\nfunction readState(row, config) {\n  const state = JSON.parse(row.stateJson);\n  if (\n    !isObject(state) ||\n    !STAGES.includes(state.stage) ||\n    !Number.isInteger(state.questionIndex) ||\n    state.questionIndex < 0 ||\n    state.questionIndex > config.qualification.questions.length ||\n    !Number.isInteger(state.failures) ||\n    state.failures < 0 ||\n    state.failures > 2 ||\n    !isObject(state.answers) ||\n    !Array.isArray(state.offeredSlots) ||\n    state.offeredSlots.length > 9 ||\n    !state.offeredSlots.every(validSlot) ||\n    typeof state.declined !== \"boolean\" ||\n    !date(state.firstContactAt) ||\n    !date(state.lastContactAt)\n  )\n    throw new Error(\"invalid_state\");\n  if (\n    state.appointment !== null &&\n    state.appointment !== undefined &&\n    (!isObject(state.appointment) ||\n      !date(state.appointment.start) ||\n      !date(state.appointment.end) ||\n      Date.parse(state.appointment.start) >=\n        Date.parse(state.appointment.end) ||\n      !(\n        state.appointment.service === null ||\n        text(state.appointment.service, 200)\n      ))\n  )\n    throw new Error(\"invalid_state\");\n  for (const [id, answer] of Object.entries(state.answers)) {\n    if (\n      !validAnswer(\n        config.qualification.questions.find((q) => q.id === id),\n        answer,\n      )\n    )\n      throw new Error(\"invalid_state\");\n  }\n  if (\n    state.stage === \"talking\" &&\n    config.qualification.questions\n      .slice(0, state.questionIndex)\n      .some((q) => !Object.hasOwn(state.answers, q.id))\n  )\n    throw new Error(\"invalid_state\");\n  // Não copiar colunas ou propriedades desconhecidas da tabela.\n  return {\n    ...freshState(state.firstContactAt),\n    stage: state.stage,\n    questionIndex: state.questionIndex,\n    answers: state.answers,\n    failures: state.failures,\n    declined: state.declined,\n    lastContactAt: state.lastContactAt,\n    offeredSlots: state.offeredSlots.map(({ start, end, label }) => ({\n      start,\n      end,\n      label,\n    })),\n    appointment: state.appointment\n      ? {\n          start: state.appointment.start,\n          end: state.appointment.end,\n          service: state.appointment.service,\n        }\n      : null,\n  };\n}\n\nfunction prepareConversation(input, rows, now) {\n  if (!validInput(input) || !date(now))\n    return {\n      valid: false,\n      logs: [{ event: \"conversation_error\", code: \"invalid_input\" }],\n    };\n  const { event, config } = input;\n  const matches = rows.filter(\n    (row) => row.clientId === config.id && row.leadId === event.leadId,\n  );\n  let state = freshState(now);\n  let stateError = matches.length > 1;\n  let isNew = matches.length === 0;\n  if (matches.length === 1) {\n    try {\n      state = readState(matches[0], config);\n    } catch {\n      stateError = true;\n    }\n    if (\n      !stateError &&\n      Date.parse(state.lastContactAt) < Date.parse(now) - 30 * DAY\n    ) {\n      state = freshState(now);\n      isNew = true;\n    }\n  }\n  if (state.stage === \"stopped\") {\n    state = { ...freshState(now), firstContactAt: state.firstContactAt };\n    isNew = true;\n  }\n  const question =\n    state.stage === \"talking\"\n      ? (config.qualification.questions[state.questionIndex] ?? null)\n      : null;\n  const option =\n    question?.type === \"choice\" && event.type === \"reply\"\n      ? question.options.find((o) => `${question.id}:${o.id}` === event.replyId)\n      : null;\n  // Texto extra na rajada também precisa ser interpretado, mesmo quando contém botão.\n  const directAnswer =\n    option && event.messageIds.length === 1 && event.text === option.label\n      ? option.id\n      : null;\n  return {\n    valid: true,\n    event,\n    config,\n    state,\n    stateError,\n    isNew,\n    question,\n    directAnswer,\n    now,\n  };\n}\n\nfunction whatsapp(context, action, fields) {\n  return {\n    action,\n    clientId: context.config.id,\n    ...context.config.whatsapp,\n    leadId: context.event.leadId,\n    ...fields,\n  };\n}\n\nfunction markReadRequest(context) {\n  const { leadId: _leadId, ...request } = whatsapp(context, \"markRead\", {\n    messageId: context.event.messageIds.at(-1),\n  });\n  return request;\n}\n\nfunction crmRequest(context, state) {\n  const { config, event } = context;\n  return {\n    action: \"upsertLead\",\n    clientId: config.id,\n    timezone: config.timezone,\n    crm: config.crm,\n    lead: {\n      id: event.leadId,\n      phone: event.phone,\n      name: event.name,\n      channel: \"whatsapp\",\n      stage: state.stage,\n      answers: config.qualification.questions\n        .filter((q) => Object.hasOwn(state.answers, q.id))\n        .map((q) => ({\n          question: q.text,\n          answer:\n            q.type === \"choice\"\n              ? q.options.find((o) => o.id === state.answers[q.id]).label\n              : String(state.answers[q.id]),\n        })),\n      appointment: state.appointment,\n      firstContactAt: state.firstContactAt,\n      lastContactAt: state.lastContactAt,\n    },\n  };\n}\n\nfunction qualified(config, answers) {\n  return config.qualification.rules.every((r) =>\n    r.in\n      ? r.in.includes(answers[r.question])\n      : Number.isFinite(answers[r.question]) &&\n        (r.min === undefined || answers[r.question] >= r.min) &&\n        (r.max === undefined || answers[r.question] <= r.max),\n  );\n}\n\nfunction validInterpretation(result, question) {\n  if (\n    !isObject(result) ||\n    result.ok !== true ||\n    ![\"urgent\", \"stop\", \"human\", \"answer\", \"question\", \"other\"].includes(\n      result.intent,\n    )\n  )\n    return false;\n  if ([\"urgent\", \"stop\"].includes(result.intent)) return true;\n  return (\n    (result.reply === null || text(result.reply, 400)) &&\n    (result.answer === null || validAnswer(question, result.answer)) &&\n    (result.intent !== \"answer\" || result.answer !== null)\n  );\n}\n\nfunction resolveConversation(context, interpretation = null) {\n  const { config, event, now, question } = context;\n  const state = JSON.parse(JSON.stringify(context.state));\n  state.lastContactAt = now;\n  const plan = {\n    state,\n    clientId: config.id,\n    leadId: event.leadId,\n    crm: [],\n    outbound: null,\n    pause: null,\n    logs: [],\n    readyForScheduling: false,\n  };\n  const record = () => plan.crm.push(crmRequest(context, state));\n  const changeStage = (stage) => {\n    if (state.stage !== stage) {\n      state.stage = stage;\n      record();\n    }\n  };\n  const log = (code) =>\n    plan.logs.push({\n      event: \"conversation_attention\",\n      clientId: config.id,\n      code,\n    });\n  const send = (value) => {\n    plan.outbound = whatsapp(context, \"sendText\", { text: value });\n  };\n  const handoff = (reason, message) => {\n    const stage =\n      reason === \"stop\"\n        ? \"stopped\"\n        : reason === \"urgent\"\n          ? \"urgent\"\n          : \"with_team\";\n    state.declined = reason === \"stop\";\n    state.failures = 0;\n    changeStage(stage);\n    plan.pause = {\n      clientId: config.id,\n      leadKey: event.leadId,\n      pausedUntil: new Date(Date.parse(now) + DAY).toISOString(),\n      reason,\n    };\n    send(message);\n    log(reason);\n  };\n  if (context.isNew) record();\n  if (context.stateError) {\n    log(\"invalid_state\");\n    handoff(\"handoff\", config.messages.failure);\n    return plan;\n  }\n  if (event.type === \"unsupported\") {\n    handoff(\"handoff\", config.messages.handoff);\n    return plan;\n  }\n\n  let answer = context.directAnswer;\n  let reply = null;\n  let failed = false;\n  if (context.needsAI) {\n    failed = !validInterpretation(interpretation, question);\n    if (failed) log(\"ai_failed\");\n    else {\n      const intent = interpretation.intent;\n      if (intent === \"urgent\") {\n        handoff(\"urgent\", config.messages.urgent);\n        return plan;\n      }\n      if (intent === \"stop\") {\n        handoff(\"stop\", config.messages.stopped);\n        return plan;\n      }\n      if (intent === \"human\") {\n        handoff(\n          \"handoff\",\n          [interpretation.reply, config.messages.handoff]\n            .filter(Boolean)\n            .join(\"\\n\\n\"),\n        );\n        return plan;\n      }\n      answer = interpretation.answer;\n      reply = interpretation.reply;\n    }\n  } else if (answer === null) {\n    const value = normalize(event.text ?? \"\");\n    if (\n      /^(pare|parar|stop|sair|nao me envie mais mensagens|nao quero mais mensagens)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"stop\", config.messages.stopped);\n      return plan;\n    }\n    if (\n      /^(atendente|humano|quero falar com (uma pessoa|atendente)|cancelar|remarcar)[.! ]*$/.test(\n        value,\n      )\n    ) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    if (question?.type === \"number\" && /^-?\\d+(?:[.,]\\d+)?$/.test(value))\n      answer = Number(value.replace(\",\", \".\"));\n  }\n\n  if (answer !== null && validAnswer(question, answer)) {\n    state.answers = { ...state.answers, [question.id]: answer };\n    state.questionIndex += 1;\n    state.failures = 0;\n  } else if (!question && reply) state.failures = 0;\n  else if (failed || !context.isNew)\n    state.failures = Math.min(2, state.failures + 1);\n\n  if (state.failures >= 2 || (!question && failed)) {\n    handoff(\n      \"handoff\",\n      failed ? config.messages.failure : config.messages.handoff,\n    );\n    return plan;\n  }\n  if (\n    state.stage === \"talking\" &&\n    state.questionIndex === config.qualification.questions.length\n  ) {\n    if (!qualified(config, state.answers)) {\n      changeStage(\"not_qualified\");\n      send(config.messages.notQualified);\n      return plan;\n    }\n    changeStage(\"qualified\");\n    if (!config.calendar) {\n      handoff(\"handoff\", config.messages.handoff);\n      return plan;\n    }\n    plan.readyForScheduling = true;\n  }\n  if (state.stage === \"qualified\") plan.readyForScheduling = true;\n  const next =\n    state.stage === \"talking\"\n      ? config.qualification.questions[state.questionIndex]\n      : null;\n  const parts = [\n    context.isNew ? config.messages.welcome : null,\n    reply,\n    next?.text,\n  ].filter(Boolean);\n  if (parts.length > 0) {\n    const fields = { text: parts.join(\"\\n\\n\") };\n    if (next?.type === \"choice\") {\n      fields.options = next.options.map((o) => ({\n        id: `${next.id}:${o.id}`,\n        label: o.label,\n      }));\n      if (next.options.length > 3) fields.listButton = \"Ver opções\";\n      plan.outbound = whatsapp(\n        context,\n        next.options.length > 3 ? \"sendList\" : \"sendButtons\",\n        fields,\n      );\n    } else send(fields.text);\n  } else if (!plan.readyForScheduling)\n    handoff(\"handoff\", config.messages.handoff);\n  return plan;\n}\n\nfunction safeLog(code, clientId) {\n  return { event: \"conversation_error\", clientId, code };\n}\n\nconst plan=$('Failed pause request').first().json.failedPlan;if($json.error)plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'pause_write_failed'});return [{json:{failedPlan:plan,request:crmRequest($('After mark read').first().json,plan.state)}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000043",
+      "name": "Failed CRM request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [8910, 0],
+      "parameters": {
+        "jsCode": "return [{json:$json.request}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000044",
+      "name": "Update failed delivery CRM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [9020, 0],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "crmUpsertRouter1",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000045",
+      "name": "Failed delivery result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [9240, 0],
+      "parameters": {
+        "jsCode": "const plan=$('Failed delivery CRM').first().json.failedPlan;if($json.ok!==true)plan.logs.push({event:'conversation_error',clientId:plan.clientId,code:'crm_failed'});return [{json:plan}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000046",
+      "name": "Storage failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6000, 450],
+      "parameters": {
+        "jsCode": "const clientId=$('Validate').first().json.input.config.id;return [{json:{ok:false,clientId,logs:[{event:'conversation_error',clientId,code:'storage_failed'}]}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000047",
+      "name": "Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [9460, 200],
+      "parameters": {
+        "jsCode": "const plan=$input.first().json;for(const entry of plan.logs??[])console.log(JSON.stringify({event:entry.event, ...(entry.clientId?{clientId:entry.clientId}:{}),code:entry.code}));return [{json:{ok:plan.ok!==false,stage:plan.state?.stage??null,readyForScheduling:plan.readyForScheduling===true && plan.ok!==false && plan.skipped!==true,skipped:plan.skipped===true}}];"
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000048",
+      "name": "Every day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 700],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 3,
+              "triggerAtMinute": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000049",
+      "name": "Ensure state table daily",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 700],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "lead_conversations",
+        "columns": {
+          "column": [
+            {
+              "name": "clientId",
+              "type": "string"
+            },
+            {
+              "name": "leadId",
+              "type": "string"
+            },
+            {
+              "name": "stateJson",
+              "type": "string"
+            },
+            {
+              "name": "lastContactAt",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000050",
+      "name": "Delete old conversations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [440, 700],
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lead_conversations",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "lastContactAt",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus({days:30}).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c0280000-0000-4028-8028-000000000051",
+      "name": "Cleanup result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 700],
+      "parameters": {
+        "jsCode": "const failed=$json.error||$('Ensure state table daily').first().json.error;return [{json:{ok:!failed,logs:failed?[{event:'conversation_error',code:'cleanup_failed'}]:[]}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Valid input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid input": {
+      "main": [
+        [
+          {
+            "node": "Ensure state table",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure state table": {
+      "main": [
+        [
+          {
+            "node": "Ensure pause table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure pause table": {
+      "main": [
+        [
+          {
+            "node": "Storage ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storage ready": {
+      "main": [
+        [
+          {
+            "node": "Read state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read state": {
+      "main": [
+        [
+          {
+            "node": "State read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State read": {
+      "main": [
+        [
+          {
+            "node": "Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare": {
+      "main": [
+        [
+          {
+            "node": "Mark read request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark read request": {
+      "main": [
+        [
+          {
+            "node": "Mark read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark read": {
+      "main": [
+        [
+          {
+            "node": "After mark read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After mark read": {
+      "main": [
+        [
+          {
+            "node": "Needs AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid input": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs AI": {
+      "main": [
+        [
+          {
+            "node": "AI request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI request": {
+      "main": [
+        [
+          {
+            "node": "Interpret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpret": {
+      "main": [
+        [
+          {
+            "node": "Resolve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve": {
+      "main": [
+        [
+          {
+            "node": "Check pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check pause": {
+      "main": [
+        [
+          {
+            "node": "Pause status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause status": {
+      "main": [
+        [
+          {
+            "node": "May respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "May respond": {
+      "main": [
+        [
+          {
+            "node": "Save state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save state": {
+      "main": [
+        [
+          {
+            "node": "State saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State saved": {
+      "main": [
+        [
+          {
+            "node": "Saved plan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Saved plan": {
+      "main": [
+        [
+          {
+            "node": "Needs pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs pause": {
+      "main": [
+        [
+          {
+            "node": "Pause request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Effects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause request": {
+      "main": [
+        [
+          {
+            "node": "Pause lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause lead": {
+      "main": [
+        [
+          {
+            "node": "Pause saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause saved": {
+      "main": [
+        [
+          {
+            "node": "Effects",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Effects": {
+      "main": [
+        [
+          {
+            "node": "Has CRM changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has CRM changes": {
+      "main": [
+        [
+          {
+            "node": "CRM requests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM requests": {
+      "main": [
+        [
+          {
+            "node": "Update CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM": {
+      "main": [
+        [
+          {
+            "node": "After CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After CRM": {
+      "main": [
+        [
+          {
+            "node": "Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery": {
+      "main": [
+        [
+          {
+            "node": "Has message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has message": {
+      "main": [
+        [
+          {
+            "node": "Message request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message request": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message": {
+      "main": [
+        [
+          {
+            "node": "Delivery status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery status": {
+      "main": [
+        [
+          {
+            "node": "Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivered": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save failed delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save failed delivery": {
+      "main": [
+        [
+          {
+            "node": "Failed pause request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed pause request": {
+      "main": [
+        [
+          {
+            "node": "Pause failed delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause failed delivery": {
+      "main": [
+        [
+          {
+            "node": "Failed delivery CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed delivery CRM": {
+      "main": [
+        [
+          {
+            "node": "Failed CRM request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed CRM request": {
+      "main": [
+        [
+          {
+            "node": "Update failed delivery CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update failed delivery CRM": {
+      "main": [
+        [
+          {
+            "node": "Failed delivery result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed delivery result": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storage failure": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every day": {
+      "main": [
+        [
+          {
+            "node": "Ensure state table daily",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure state table daily": {
+      "main": [
+        [
+          {
+            "node": "Delete old conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete old conversations": {
+      "main": [
+        [
+          {
+            "node": "Cleanup result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup result": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "active": false
+}

@@ -63,6 +63,7 @@ de `docs/` têm um `README.md` curto: propósito, como rodar ou usar, como testa
 Mudança de estrutura → registrar em `DECISIONS.md` e atualizar esta seção.
 IA: `integrations/ai/gemini/` serve somente à demo com dados fictícios (D030);
 `integrations/ai/anthropic/` permanece com validação real paga adiada.
+Conversa e estado por lead: `automations/lead-conversation/` (T028).
 
 ## 4. Regras de desenvolvimento
 
