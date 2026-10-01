@@ -58,6 +58,13 @@ A fixture não substitui a base da T038. Rodar casos sequencialmente e respeitar
 em 429 persistente, interromper o ensaio e retomar após a renovação da cota. Não declarar
 o cenário validado com resposta simulada. Arquivar o workflow temporário após o ensaio.
 
+Validação da T024 concluída em 2026-09-30: os cinco casos passaram na API real com o
+prompt final. A versão foi publicada pelo editor; uma chamada via Execute Workflow
+confirmou a escolha `cleaning` e o endereço fictício, e outra sem `dataMode` foi
+bloqueada antes do HTTP. Export sem credenciais; workflow temporário arquivado.
+Os ensaios anteriores tiveram 503 e limite diário 429: a aprovação dos casos não
+garante disponibilidade do plano gratuito. Teste de ponta a ponta fica para a T030.
+
 Referências: [modelo](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash),
 [preços](https://ai.google.dev/gemini-api/docs/pricing),
 [API generateContent](https://ai.google.dev/api/generate-content),
