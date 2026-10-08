@@ -152,6 +152,8 @@ chamar serviços reais para estes ensaios.
 Validação em 2026-10-08: 600 testes automáticos (38 de agendamento), 12 cenários
 de agendamento no n8n com 48 requisições, mais regressão da conversa e da fila
 por lead, todos com conectores simulados. Sem chamadas pagas ou dados reais.
+Publicado no n8n local pelo editor na mesma data; o export da versão publicada
+confirmou os 82 nós, conexões e configurações iguais ao código testado.
 
 ### Limites
 

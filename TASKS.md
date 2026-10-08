@@ -110,12 +110,14 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-- [ ] T029 [CODEX] Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
-  Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
-  Implementado: lista de nove horários e Nenhum desses, reserva por opção guardada, slot_taken com relistagem, confirmação e CRM scheduled; pausa conferida novamente após a agenda. 600 testes passaram (38 novos), lint/tipos e validadores passaram; 12 cenários/48 requisições no n8n isolado, mais regressão da T028, sem APIs externas.
-  Publicação pendente: sessão do editor expirou; versão estável da T028 restaurada no n8n local. Dono precisa fazer login para publicar e conferir a versão ativa antes de concluir/merge. CLI reproduziu a T045 mesmo com versionId explícito; não considerar versão antiga como T029 publicada.
+Nenhuma.
 
 ## Concluído
+
+- [x] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
+  Ref: automations/lead-conversation/README.md; tests/conversation-scheduling.test.ts
+  Validação: 600 testes (38 novos), lint, tipos, 11 workflows e 3 configs passaram. No n8n descartável: 12 cenários/48 requisições de agendamento, mais regressão da T028. Nenhuma API externa chamada.
+  Publicação: leadConversation publicado pelo editor em 2026-10-08; export --published confirmou os 82 nós, conexões e configurações iguais ao código testado. Export limpo, sem credenciais. Clínica inativa e IA desligada; configuração da demo e acessos reais seguem na T038/T040/T030.
 
 - [x] T028 Criar a conversa com perguntas, IA administrativa, qualificação, CRM, equipe, urgência e parada, com estado por lead e limpeza de 30 dias
   Ref: automations/lead-conversation/README.md, clients/README.md, DECISIONS.md (D031)
@@ -250,36 +252,25 @@ Observações:
 - ...
 -->
 
-### Handoff T029 (publicação pendente)
-Implementado:
-- Agendamento em conversation.js/resolveCalendar e workflow leadConversation: validação da listagem, opções guardadas, book pelo intervalo, serviceQuestion da config, CRM scheduled, confirmação, slot_taken, noSlots e encaminhamento. IDs incluem início/fim, nunca índice de lista.
-- Texto livre não reserva; cliques isolados recuperam somente opções guardadas. Rajada com texto adicional passa pela IA e mantém prioridade de urgent/stop/human. Falha de envio preserva appointment. Pausa recebida durante book suprime confirmação, mas conserva reserva no estado e CRM.
-- 600 testes passaram, incluindo 38 em tests/conversation-scheduling.test.ts; fixture tests/fixtures/conversation/scheduling.json. Lint, tipos, 11 workflows e 3 configs passaram. 48 requisições/12 cenários no n8n descartável mais regressão T028 passaram; nenhuma API real chamada.
-Próxima tarefa: concluir T029 após login no editor local
-Observações:
-- A versão estável da T028 foi restaurada/publicada no n8n para não deixar a entrada sem conversa. Após login do dono, reimportar o workflow desta branch e publicar pelo editor, conferir versão ativa contra o código testado, exportar limpo, mover T029 para Concluído e fazer commit/merge dev/main (autorização do dono já existe).
-- CLI de republicação mantém versão antiga (T045), inclusive com --versionId. Não contornar autenticação nem redefinir senha. Repositório contém a versão nova; n8n continua na T028 até finalizar publicação. Conferir o conteúdo com export:workflow --published, não apenas os IDs de versão.
-- Instância descartável de testes removida. Scripts de ensaio e gerador em %TEMP%/zenvolyx-t029/: build.mjs embute o núcleo a partir do baseline da T028; runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios. Nunca importar essas variantes na instância principal.
-- A T041 pode automatizar os cenários completos depois da conclusão. T038/T040 seguem pendentes; não ativar clínica ou IA nesta tarefa. T044 mantém a concorrência entre leads diferentes; T043, remarcação/cancelamento.
-
-### Handoff T028
+### Handoff T029
 Concluído:
-- leadConversation ligado a Burst event na entrada; ambos publicados no n8n local e exportados sem credenciais. A entrada conserva as referências Crypto locais.
-- Estado por cliente/BSUID, perguntas, regras, CRM, urgência/parada com texto fixo, pausas de 24 h e limpeza de 30 dias. Execuções não persistidas; Report concentra logs sem dados pessoais. Falha de CRM não interrompe; falha de envio pausa e registra com a equipe.
-- Config versão 3 e ai.dataMode synthetic aprovados pelo dono (D031). Gemini só com ai.enabled true e synthetic; nenhuma chamada paga ou ativação de faturamento.
+- Agendamento em conversation.js/resolveCalendar e workflow leadConversation: opções guardadas, reserva pelo intervalo, serviço da config, CRM scheduled, confirmação, slot_taken, noSlots e encaminhamento. IDs incluem início/fim, nunca índice de lista.
+- Texto livre não reserva; cliques isolados recuperam somente opções guardadas. Rajada com texto adicional passa pela IA e mantém prioridade de urgent/stop/human. Falha de envio preserva appointment. Pausa recebida durante book suprime confirmação, mas conserva reserva no estado e CRM.
+- 600 testes passaram, incluindo 38 de agendamento; lint, tipos, 11 workflows e 3 configs passaram. 48 requisições/12 cenários no n8n descartável mais regressão T028 passaram; nenhuma API real chamada. Instância de teste removida.
+- Publicado pelo editor local em 2026-10-08; conteúdo do export --published conferido contra o código testado. Export sem credenciais.
 Arquivos principais:
 - automations/lead-conversation/README.md, conversation.js, conversation.d.ts, workflow.json
-- tests/lead-conversation.test.ts; tests/fixtures/conversation/input.json
-Próxima tarefa: T029
+- tests/conversation-scheduling.test.ts; tests/lead-conversation.test.ts
+- tests/fixtures/conversation/scheduling.json; tests/fixtures/conversation/input.json
+Próxima tarefa: T041
 Observações:
-- Continuar qualified/readyForScheduling no plano: chamar calendarRouter01, guardar as opções oferecidas e reservar somente a opção guardada. Até 9 horários e Nenhum desses; slot_taken usa messages.slotTaken e lista novamente; booked substitui {slot} pelo label. Sem agenda, o qualificado já vai para a equipe.
-- lead_conversation_turns ordena rajadas do mesmo lead; o fluxo espera até 10 min e libera a reserva nas saídas tratadas. Reserva interrompida expira após 30 min; reinício pode perder mensagens em processamento. Concorrência entre leads para o mesmo horário continua na T044.
-- CRM: crmUpsertRouter1, Execute Workflow/Database/each, contrato completo de integrations/crm/README.md. Respostas numéricas viram texto; não enviar texto bruto da conversa. WhatsApp: whatsappCloudApi com gatewayWorkflowId e phoneNumberId da config. Logs e chamadas de equipe ficam sem aviso por e-mail até T027.
-- Gemini: aiGeminiDemo0001; synthetic não anonimiza texto nem comprova plano gratuito. Somente mensagens inteiramente fictícias, sem contornar cotas ou fallback pago. Base administrativa ainda T038; agenda fictícia T040; clínica inativa e IA desligada.
-- N8n Code não oferece structuredClone aqui; o núcleo usa cópia JSON e atribuição por objeto novo para preservar respostas na serialização. Testes conferem que o JS embutido é igual ao arquivo fonte.
-- Publicar pelo editor após reimportar (T045), conferir activeVersionId/versionId e limpar export conforme D022. CLI com N8N_RUNNERS_BROKER_PORT=5690; tabelas devem ser ensaiadas por webhook/Execute Workflow, não diretamente pela CLI.
-- Ensaio desta tarefa usou tabelas reais e conectores simulados em container descartável; scripts temporários em %TEMP%/zenvolyx-t028/ (build.mjs, runtime.mjs, verify.mjs, concurrency.mjs, cleanup.mjs). Instância de teste removida. t028Probe0000001 ficou arquivado no n8n principal.
-- Permissões reais do CRM/agenda e envio pelo número Meta permanecem para T030, conforme os READMEs dos conectores. Nenhum teste simulado substitui essa validação.
+- Automatizar os cenários de docs/arquitetura/demo-cenarios.md com IA, CRM e agenda simulados. Aproveitar núcleo puro e fixtures existentes; testes já conferem que o JS embutido corresponde ao arquivo fonte. N8n Code usa cópia JSON, pois structuredClone não está disponível neste ambiente.
+- lead_conversation_turns ordena rajadas do mesmo lead; espera até 10 min e libera a reserva nas saídas tratadas. Reserva interrompida expira após 30 min; reinício pode perder mensagens em processamento. Concorrência entre leads distintos permanece T044; remarcação/cancelamento, T043.
+- CRM crmUpsertRouter1, WhatsApp whatsappCloudApi, IA aiGeminiDemo0001 e agenda calendarRouter01 via Execute Workflow/Database/each. Não enviar texto bruto ao CRM nem datas inventadas pela IA à agenda. Logs sem dados pessoais; avisos à equipe seguem T027.
+- T038/T040 pendentes: clínica inativa e IA desligada. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
+- Publicar pelo editor após reimportar (T045); conferir conteúdo com export:workflow --published, não apenas IDs de versão. CLI com N8N_RUNNERS_BROKER_PORT=5690; ensaiar tabelas por webhook/Execute Workflow.
+- Scripts de ensaio em %TEMP%/zenvolyx-t029/: runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios; não importar essas variantes na instância principal. Regressão anterior em %TEMP%/zenvolyx-t028/.
+- Permissões reais do CRM/agenda e envio pelo número Meta permanecem para T030. Testes simulados não substituem essa validação.
 
 ### Handoff T022
 Concluído:
@@ -290,10 +281,9 @@ Arquivos principais:
 - integrations/calendar/router/README.md e workflow.json; integrations/calendar/router/slots.js
 - integrations/calendar/google-calendar/README.md e workflow.json
 - tests/calendar.test.ts; tests/fixtures/calendar/
-Próximas tarefas: T040 e T029 (quando suas demais dependências estiverem concluídas)
+Próxima tarefa: T040
 Observações:
 - T040/T030: ativar Calendar API, acrescentar o escopo `https://www.googleapis.com/auth/calendar` preservando o de Sheets e compartilhar a agenda fictícia com a conta de serviço. Seguir o README do conector; a API simulada não valida permissões reais do Google.
-- T029: chamar o roteador via Execute Workflow (versão 1.2, fonte Database, um item por chamada). Guardar os horários oferecidos; `book` recebe a opção guardada, nunca uma data inventada pela IA ou enviada livremente pelo lead. Não recebe `scheduling`.
 - Horários UTC, rótulos no fuso do cliente, limite de 10; omitir horários ambíguos/inexistentes em DST. `slot_taken` pede nova listagem; `event_conflict` exige equipe. O roteador já repetiu falhas transitórias e registrou somente código/clientId; T027 acrescenta o aviso.
 - Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
 - Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
@@ -309,15 +299,3 @@ Próximas tarefas: T038 e T040
 Observações:
 - T038 e T040 (Claude) completam a config da clínica; o README dela diz o que falta em cada uma.
 - A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).
-
-### Handoff T039
-Concluído:
-- `messages.urgent` e `messages.slotTaken` obrigatórias e não vazias em todas as configs e fixtures; formato da config atualizado para versão 2.
-- Mensagem de urgência fixa na clínica fictícia, com encaminhamento à equipe e orientação para casos graves; texto de horário ocupado pede nova escolha.
-Arquivos principais:
-- clients/README.md; clients/odontologia-demo/config.json
-- scripts/client-config-schema.ts; tests/client-config.test.ts
-Próximas tarefas: T028 e T029, quando suas demais dependências estiverem concluídas
-Observações:
-- T028: ao identificar `urgent`, enviar o texto de `messages.urgent` da config, ignorando uma eventual resposta escrita pela IA; registrar CRM e pausar conforme D026. A clínica revisa esse texto antes da ativação (T030).
-- T029: após `slot_taken`, enviar `messages.slotTaken` e uma nova lista; não confirmar o horário anterior.
