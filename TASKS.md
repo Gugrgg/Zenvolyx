@@ -113,7 +113,7 @@ podem começar antes de a demo ficar pronta.
 - [ ] T029 [CODEX] Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
   Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
   Implementado: lista de nove horários e Nenhum desses, reserva por opção guardada, slot_taken com relistagem, confirmação e CRM scheduled; pausa conferida novamente após a agenda. 600 testes passaram (38 novos), lint/tipos e validadores passaram; 12 cenários/48 requisições no n8n isolado, mais regressão da T028, sem APIs externas.
-  Publicação pendente: rascunho importado no n8n local; sessão do editor expirou. Dono precisa fazer login para publicar e conferir a versão ativa antes de concluir/merge. CLI reproduziu a T045 mesmo com versionId explícito; não considerar versão antiga como T029 publicada.
+  Publicação pendente: sessão do editor expirou; versão estável da T028 restaurada no n8n local. Dono precisa fazer login para publicar e conferir a versão ativa antes de concluir/merge. CLI reproduziu a T045 mesmo com versionId explícito; não considerar versão antiga como T029 publicada.
 
 ## Concluído
 
@@ -257,9 +257,9 @@ Implementado:
 - 600 testes passaram, incluindo 38 em tests/conversation-scheduling.test.ts; fixture tests/fixtures/conversation/scheduling.json. Lint, tipos, 11 workflows e 3 configs passaram. 48 requisições/12 cenários no n8n descartável mais regressão T028 passaram; nenhuma API real chamada.
 Próxima tarefa: concluir T029 após login no editor local
 Observações:
-- Rascunho importado em leadConversation, ainda não publicado. Publicar pelo editor após o dono fazer login, conferir versão ativa contra o código testado, exportar limpo, mover T029 para Concluído e fazer commit/merge dev/main (autorização do dono já existe).
-- Não reimportar se o rascunho já estiver correto. CLI de republicação mantém versão antiga (T045), inclusive com --versionId. Não contornar autenticação nem redefinir senha.
-- Scripts de ensaio e gerador em %TEMP%/zenvolyx-t029/: build.mjs embute o núcleo a partir do baseline da T028; runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios. Nunca importar essas variantes na instância principal.
+- A versão estável da T028 foi restaurada/publicada no n8n para não deixar a entrada sem conversa. Após login do dono, reimportar o workflow desta branch e publicar pelo editor, conferir versão ativa contra o código testado, exportar limpo, mover T029 para Concluído e fazer commit/merge dev/main (autorização do dono já existe).
+- CLI de republicação mantém versão antiga (T045), inclusive com --versionId. Não contornar autenticação nem redefinir senha. Repositório contém a versão nova; n8n continua na T028 até finalizar publicação. Conferir o conteúdo com export:workflow --published, não apenas os IDs de versão.
+- Instância descartável de testes removida. Scripts de ensaio e gerador em %TEMP%/zenvolyx-t029/: build.mjs embute o núcleo a partir do baseline da T028; runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios. Nunca importar essas variantes na instância principal.
 - A T041 pode automatizar os cenários completos depois da conclusão. T038/T040 seguem pendentes; não ativar clínica ou IA nesta tarefa. T044 mantém a concorrência entre leads diferentes; T043, remarcação/cancelamento.
 
 ### Handoff T028
