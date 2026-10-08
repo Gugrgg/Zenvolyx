@@ -1,0 +1,119 @@
+{
+  "event": {
+    "clientId": "odontologia-demo",
+    "channel": "whatsapp",
+    "leadId": "BR.0000000000000000028",
+    "phone": null,
+    "name": null,
+    "messageIds": ["wamid.T028.0001"],
+    "type": "text",
+    "text": "Olá",
+    "replyId": null,
+    "receivedAt": "2026-09-30T12:00:00.000Z"
+  },
+  "config": {
+    "version": 3,
+    "id": "odontologia-demo",
+    "name": "Clínica Sorriso Demo",
+    "active": true,
+    "timezone": "America/Sao_Paulo",
+    "whatsapp": {
+      "phoneNumberId": "000000000028001",
+      "gatewayWorkflowId": "demoGateway00001"
+    },
+    "crm": {
+      "provider": "google-sheets",
+      "settings": {
+        "spreadsheetId": "planilha-ficticia"
+      }
+    },
+    "qualification": {
+      "questions": [
+        {
+          "id": "procedure",
+          "text": "Qual tratamento você procura?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "implant",
+              "label": "Implante"
+            },
+            {
+              "id": "orthodontics",
+              "label": "Ortodontia"
+            },
+            {
+              "id": "aligners",
+              "label": "Alinhadores"
+            },
+            {
+              "id": "whitening",
+              "label": "Clareamento"
+            },
+            {
+              "id": "cleaning",
+              "label": "Limpeza"
+            },
+            {
+              "id": "checkup",
+              "label": "Avaliação geral"
+            },
+            {
+              "id": "other",
+              "label": "Outro"
+            }
+          ]
+        },
+        {
+          "id": "patient",
+          "text": "É a sua primeira consulta com a gente?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "new",
+              "label": "Sim, primeira vez"
+            },
+            {
+              "id": "returning",
+              "label": "Já sou paciente"
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "question": "patient",
+          "in": ["new"]
+        }
+      ]
+    },
+    "messages": {
+      "welcome": "Olá! Aqui é a Clínica Sorriso Demo. Sou o assistente virtual da clínica: tiro dúvidas e agendo a sua avaliação por aqui.",
+      "handoff": "Certo! Vou pedir para alguém da nossa equipe continuar com você por aqui.",
+      "failure": "Desculpe, tive um problema aqui. Alguém da nossa equipe vai te responder em breve.",
+      "urgent": "Sinto muito que você esteja passando por isso. Vou chamar agora a nossa equipe para te atender com prioridade. Se tiver dificuldade para respirar ou engolir, sangramento que não para ou inchaço que aumenta rápido, procure agora um pronto-socorro ou ligue 192.",
+      "notQualified": "Que bom falar com você de novo! Como você já é paciente, vou pedir para a nossa recepção continuar o seu atendimento por aqui.",
+      "chooseSlot": "Ótimo! Escolha o melhor horário para a sua avaliação:",
+      "noSlots": "Não encontrei horários livres agora. Vou pedir para a nossa recepção combinar um horário com você.",
+      "slotTaken": "Esse horário acabou de ser ocupado. Veja outras opções:",
+      "booked": "Pronto! Sua avaliação ficou marcada para {slot}. Se precisar remarcar, é só chamar por aqui.",
+      "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
+    },
+    "calendar": {
+      "provider": "google-calendar",
+      "settings": {
+        "calendarId": "agenda-ficticia"
+      }
+    },
+    "scheduling": {
+      "durationMinutes": 60,
+      "minNoticeHours": 2,
+      "daysAhead": 14,
+      "hours": {
+        "mon": ["09:00-12:00"],
+        "tue": ["09:00-12:00"]
+      },
+      "serviceQuestion": "procedure"
+    }
+  }
+}

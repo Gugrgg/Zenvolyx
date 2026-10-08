@@ -113,6 +113,21 @@ function validConfig(config) {
     "notQualified",
     "stopped",
   ];
+  if (config.calendar !== undefined) {
+    if (
+      !isObject(config.calendar) ||
+      !text(config.calendar.provider, 50) ||
+      !isObject(config.calendar.settings) ||
+      !text(config.calendar.settings.calendarId, 1024) ||
+      !isObject(config.scheduling) ||
+      !Number.isInteger(config.scheduling.durationMinutes) ||
+      config.scheduling.durationMinutes < 1 ||
+      config.scheduling.durationMinutes > 1440
+    )
+      return false;
+    messages.push("chooseSlot", "noSlots", "slotTaken", "booked");
+    if (!config.messages?.booked?.includes?.("{slot}")) return false;
+  }
   return (
     isObject(config.messages) &&
     messages.every((key) => text(config.messages[key], 1000))
@@ -168,7 +183,7 @@ function validSlot(slot) {
     date(slot.start) &&
     date(slot.end) &&
     Date.parse(slot.start) < Date.parse(slot.end) &&
-    text(slot.label, 200)
+    text(slot.label, 24)
   );
 }
 
@@ -290,6 +305,14 @@ export function prepareConversation(input, rows, now) {
     option && event.messageIds.length === 1 && event.text === option.label
       ? option.id
       : null;
+  const slotChoice =
+    state.stage === "qualified" &&
+    event.type === "reply" &&
+    event.messageIds.length === 1
+      ? (slotOptions(state).find(
+          (o) => o.id === event.replyId && o.label === event.text,
+        )?.id ?? null)
+      : null;
   return {
     valid: true,
     event,
@@ -299,6 +322,7 @@ export function prepareConversation(input, rows, now) {
     isNew,
     question,
     directAnswer,
+    slotChoice,
     now,
   };
 }
@@ -308,6 +332,7 @@ export function aiRequest(context) {
   if (
     context.stateError ||
     context.directAnswer !== null ||
+    context.slotChoice != null ||
     event.type === "unsupported" ||
     config.ai?.enabled !== true ||
     config.ai.dataMode !== "synthetic"
@@ -409,6 +434,8 @@ export function resolveConversation(context, interpretation = null) {
     pause: null,
     logs: [],
     readyForScheduling: false,
+    calendarRequest: null,
+    schedulingPrefix: null,
   };
   const record = () => plan.crm.push(crmRequest(context, state));
   const changeStage = (stage) => {
@@ -506,6 +533,9 @@ export function resolveConversation(context, interpretation = null) {
       answer = Number(value.replace(",", "."));
   }
 
+  if (state.stage === "qualified")
+    return scheduleConversation(context, plan, reply, failed);
+
   if (answer !== null && validAnswer(question, answer)) {
     state.answers = { ...state.answers, [question.id]: answer };
     state.questionIndex += 1;
@@ -535,9 +565,8 @@ export function resolveConversation(context, interpretation = null) {
       handoff("handoff", config.messages.handoff);
       return plan;
     }
-    plan.readyForScheduling = true;
+    return scheduleConversation(context, plan, reply, false);
   }
-  if (state.stage === "qualified") plan.readyForScheduling = true;
   const next =
     state.stage === "talking"
       ? config.qualification.questions[state.questionIndex]
@@ -563,5 +592,217 @@ export function resolveConversation(context, interpretation = null) {
     } else send(fields.text);
   } else if (!plan.readyForScheduling)
     handoff("handoff", config.messages.handoff);
+  return plan;
+}
+
+function slotId(slot) {
+  return `slot:${Date.parse(slot.start)}:${Date.parse(slot.end)}`;
+}
+
+function slotOptions(state) {
+  return state.offeredSlots.length === 0
+    ? []
+    : [
+        ...state.offeredSlots.map((slot) => ({
+          id: slotId(slot),
+          label: slot.label,
+        })),
+        { id: "slot:none", label: "Nenhum desses" },
+      ];
+}
+
+function calendarBase(context, action) {
+  const { config } = context;
+  return {
+    action,
+    clientId: config.id,
+    timezone: config.timezone,
+    calendar: config.calendar,
+  };
+}
+
+function requestSlots(context, plan, prefix = null) {
+  plan.calendarRequest = {
+    ...calendarBase(context, "listSlots"),
+    scheduling: context.config.scheduling,
+    limit: 9,
+  };
+  plan.schedulingPrefix = prefix;
+  plan.readyForScheduling = true;
+  plan.outbound = null;
+  return plan;
+}
+
+function offerSlots(context, plan) {
+  plan.calendarRequest = null;
+  plan.readyForScheduling = false;
+  plan.outbound = whatsapp(context, "sendList", {
+    text: [plan.schedulingPrefix, context.config.messages.chooseSlot]
+      .filter(Boolean)
+      .join("\n\n"),
+    listButton: "Ver horários",
+    options: slotOptions(plan.state),
+  });
+  return plan;
+}
+
+function schedulingHandoff(context, plan, message, code) {
+  plan.state.stage = "with_team";
+  plan.state.failures = 0;
+  plan.state.offeredSlots = [];
+  plan.calendarRequest = null;
+  plan.readyForScheduling = false;
+  plan.pause = {
+    clientId: plan.clientId,
+    leadKey: plan.leadId,
+    pausedUntil: new Date(Date.parse(context.now) + DAY).toISOString(),
+    reason: "handoff",
+  };
+  plan.crm.push(crmRequest(context, plan.state));
+  plan.outbound = whatsapp(context, "sendText", { text: message });
+  plan.logs.push({
+    event: "conversation_attention",
+    clientId: plan.clientId,
+    code,
+  });
+  return plan;
+}
+
+function scheduleConversation(context, plan, reply, failed) {
+  const { config, event } = context;
+  if (!config.calendar)
+    return schedulingHandoff(context, plan, config.messages.handoff, "handoff");
+  if (context.slotChoice === "slot:none")
+    return schedulingHandoff(
+      context,
+      plan,
+      config.messages.handoff,
+      "slots_declined",
+    );
+  const selected = plan.state.offeredSlots.find(
+    (s) => slotId(s) === context.slotChoice,
+  );
+  if (selected && Date.parse(selected.start) > Date.parse(context.now)) {
+    const serviceQuestion = config.qualification.questions.find(
+      (q) => q.id === config.scheduling?.serviceQuestion && q.type === "choice",
+    );
+    const service =
+      serviceQuestion?.options.find(
+        (o) => o.id === plan.state.answers[serviceQuestion.id],
+      )?.label ?? null;
+    plan.state.failures = 0;
+    plan.calendarRequest = {
+      ...calendarBase(context, "book"),
+      slot: { start: selected.start, end: selected.end },
+      lead: { id: event.leadId, name: event.name, phone: event.phone },
+      service,
+    };
+    plan.readyForScheduling = true;
+    return plan;
+  }
+  if (reply) plan.state.failures = 0;
+  else if (failed || (context.state.stage === "qualified" && !selected))
+    plan.state.failures = Math.min(2, plan.state.failures + 1);
+  if (plan.state.failures >= 2)
+    return schedulingHandoff(
+      context,
+      plan,
+      failed ? config.messages.failure : config.messages.handoff,
+      "slot_choice_failed",
+    );
+  plan.schedulingPrefix = reply;
+  if (
+    !plan.state.offeredSlots.length ||
+    selected ||
+    plan.state.offeredSlots.some(
+      (s) => Date.parse(s.start) <= Date.parse(context.now),
+    )
+  )
+    return requestSlots(context, plan, reply);
+  return offerSlots(context, plan);
+}
+
+function utc(value) {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(value) &&
+    date(value) &&
+    new Date(value).toISOString().slice(0, 19) === value.slice(0, 19)
+  );
+}
+
+export function resolveCalendar(context, originalPlan, result) {
+  const plan = JSON.parse(JSON.stringify(originalPlan));
+  const request = plan.calendarRequest;
+  const { config } = context;
+  if (!request || plan.state.stage !== "qualified" || plan.pause !== null)
+    return plan;
+  const failure = (code) =>
+    schedulingHandoff(context, plan, config.messages.failure, code);
+  if (!isObject(result)) return failure("calendar_invalid_output");
+  if (result.ok !== true) {
+    if (
+      result.ok === false &&
+      result.error?.code === "slot_taken" &&
+      request.action === "book"
+    ) {
+      plan.state.offeredSlots = [];
+      return requestSlots(context, plan, config.messages.slotTaken);
+    }
+    return failure("calendar_failed");
+  }
+  if (request.action === "listSlots") {
+    if (
+      !Array.isArray(result.slots) ||
+      result.slots.length > 10 ||
+      !result.slots.every(
+        (slot) =>
+          validSlot(slot) &&
+          utc(slot.start) &&
+          utc(slot.end) &&
+          text(slot.label, 24) &&
+          Date.parse(slot.start) > Date.parse(context.now) &&
+          Date.parse(slot.end) - Date.parse(slot.start) ===
+            config.scheduling?.durationMinutes * 60000,
+      ) ||
+      new Set(result.slots.map((slot) => Date.parse(slot.start))).size !==
+        result.slots.length
+    )
+      return failure("calendar_invalid_output");
+    plan.state.offeredSlots = result.slots
+      .slice()
+      .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+      .slice(0, 9)
+      .map(({ start, end, label }) => ({ start, end, label }));
+    if (!plan.state.offeredSlots.length)
+      return schedulingHandoff(
+        context,
+        plan,
+        [plan.schedulingPrefix, config.messages.noSlots]
+          .filter(Boolean)
+          .join("\n\n"),
+        "no_slots",
+      );
+    return offerSlots(context, plan);
+  }
+  const selected = plan.state.offeredSlots.find(
+    (s) => s.start === request.slot?.start && s.end === request.slot?.end,
+  );
+  if (request.action !== "book" || !selected || !text(result.eventId, 1024))
+    return failure("calendar_invalid_output");
+  plan.state.appointment = {
+    start: selected.start,
+    end: selected.end,
+    service: request.service,
+  };
+  plan.state.stage = "scheduled";
+  plan.state.failures = 0;
+  plan.state.offeredSlots = [];
+  plan.crm.push(crmRequest(context, plan.state));
+  plan.calendarRequest = null;
+  plan.readyForScheduling = false;
+  plan.outbound = whatsapp(context, "sendText", {
+    text: config.messages.booked.replaceAll("{slot}", selected.label),
+  });
   return plan;
 }

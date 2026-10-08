@@ -205,6 +205,12 @@ describe("conversa guiada", () => {
         provider: "google-calendar",
         settings: { calendarId: "agenda-ficticia" },
       };
+      i.config.scheduling = {
+        durationMinutes: 60,
+        minNoticeHours: 2,
+        daysAhead: 14,
+        hours: { mon: ["09:00-12:00"] },
+      };
     });
     const plan = resolveConversation(ctx);
     expect(plan.state.stage).toBe("qualified");

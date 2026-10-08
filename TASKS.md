@@ -33,8 +33,6 @@ Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
   Depende: T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
 - [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
   Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
-- [ ] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
-  Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
 - [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
   Depende: T029 | Sugerido: CODEX | Ref: docs/arquitetura/demo-cenarios.md
 - [ ] T030 Testar a demo odontológica de ponta a ponta com o dono: todos os cenários no celular dele, com a IA de verdade, e o resultado na validação desta tarefa
@@ -70,6 +68,7 @@ ou o mínimo que a B012 definir).
   Depende: T016 | Sugerido: CODEX | Ref: DECISIONS.md (D022), scripts/README.md
 - [ ] T045 Conferir e corrigir o procedimento de publicação por CLI no n8n 2.40.5: validar a versão realmente executada depois de reimportar e publicar
   Sugerido: CODEX | Ref: integrations/ai/anthropic/README.md (Credencial e publicação)
+  Evidência adicional T029 (2026-10-08): em instância descartável, reimportar o mesmo ID e publicar com --versionId ainda executou o código anterior; informar versionId novo na importação não criou a versão no histórico e a publicação foi recusada. Manter publicação pelo editor.
 
 ## Fase comercial: primeiro cliente
 
@@ -111,7 +110,10 @@ podem começar antes de a demo ficar pronta.
 
 ## Em andamento
 
-Nenhuma.
+- [ ] T029 [CODEX] Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
+  Depende: T022, T028 | Sugerido: CODEX | Ref: docs/arquitetura/demo.md (Roteiro da conversa, passo 4)
+  Implementado: lista de nove horários e Nenhum desses, reserva por opção guardada, slot_taken com relistagem, confirmação e CRM scheduled; pausa conferida novamente após a agenda. 600 testes passaram (38 novos), lint/tipos e validadores passaram; 12 cenários/48 requisições no n8n isolado, mais regressão da T028, sem APIs externas.
+  Publicação pendente: rascunho importado no n8n local; sessão do editor expirou. Dono precisa fazer login para publicar e conferir a versão ativa antes de concluir/merge. CLI reproduziu a T045 mesmo com versionId explícito; não considerar versão antiga como T029 publicada.
 
 ## Concluído
 
@@ -247,6 +249,18 @@ Próxima tarefa: T032
 Observações:
 - ...
 -->
+
+### Handoff T029 (publicação pendente)
+Implementado:
+- Agendamento em conversation.js/resolveCalendar e workflow leadConversation: validação da listagem, opções guardadas, book pelo intervalo, serviceQuestion da config, CRM scheduled, confirmação, slot_taken, noSlots e encaminhamento. IDs incluem início/fim, nunca índice de lista.
+- Texto livre não reserva; cliques isolados recuperam somente opções guardadas. Rajada com texto adicional passa pela IA e mantém prioridade de urgent/stop/human. Falha de envio preserva appointment. Pausa recebida durante book suprime confirmação, mas conserva reserva no estado e CRM.
+- 600 testes passaram, incluindo 38 em tests/conversation-scheduling.test.ts; fixture tests/fixtures/conversation/scheduling.json. Lint, tipos, 11 workflows e 3 configs passaram. 48 requisições/12 cenários no n8n descartável mais regressão T028 passaram; nenhuma API real chamada.
+Próxima tarefa: concluir T029 após login no editor local
+Observações:
+- Rascunho importado em leadConversation, ainda não publicado. Publicar pelo editor após o dono fazer login, conferir versão ativa contra o código testado, exportar limpo, mover T029 para Concluído e fazer commit/merge dev/main (autorização do dono já existe).
+- Não reimportar se o rascunho já estiver correto. CLI de republicação mantém versão antiga (T045), inclusive com --versionId. Não contornar autenticação nem redefinir senha.
+- Scripts de ensaio e gerador em %TEMP%/zenvolyx-t029/: build.mjs embute o núcleo a partir do baseline da T028; runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios. Nunca importar essas variantes na instância principal.
+- A T041 pode automatizar os cenários completos depois da conclusão. T038/T040 seguem pendentes; não ativar clínica ou IA nesta tarefa. T044 mantém a concorrência entre leads diferentes; T043, remarcação/cancelamento.
 
 ### Handoff T028
 Concluído:

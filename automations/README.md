@@ -7,8 +7,8 @@ ID fixo e export limpo (D022).
   de WhatsApp e devolve a config (T016).
 - [whatsapp-inbound](whatsapp-inbound/README.md): entrada do WhatsApp, com verificação da
   Meta, assinatura, deduplicação e cliente identificado (T019).
-- [lead-conversation](lead-conversation/README.md): conversa, qualificação e encaminhamento
-  com estado persistente (T028), ligada à saída da entrada do WhatsApp.
+- [lead-conversation](lead-conversation/README.md): conversa, qualificação, agendamento e encaminhamento
+  com estado persistente (T028/T029), ligada à saída da entrada do WhatsApp.
 
 Como rodar: seguir o README da pasta para importar e publicar o workflow no n8n
 local (Docker, D006; [comandos da CLI](../infra/n8n/README.md#7-comandos-da-cli-do-n8n)).

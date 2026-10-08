@@ -12,12 +12,13 @@ export type Event = {
   replyId: string | null;
   receivedAt: string;
 };
+export type Slot = { start: string; end: string; label: string };
 export type State = {
   stage: string;
   questionIndex: number;
   answers: Record<string, string | number>;
   failures: number;
-  offeredSlots: unknown[];
+  offeredSlots: Slot[];
   declined: boolean;
   appointment: unknown;
   firstContactAt: string;
@@ -32,6 +33,7 @@ export type Context = {
   isNew: boolean;
   question: Config["qualification"]["questions"][number] | null;
   directAnswer: string | null;
+  slotChoice: string | null;
   now: string;
   needsAI?: boolean;
 };
@@ -52,6 +54,8 @@ export type Plan = {
   } | null;
   logs: Request[];
   readyForScheduling: boolean;
+  calendarRequest: Request | null;
+  schedulingPrefix: string | null;
 };
 export function validInput(input: unknown): boolean;
 export function prepareConversation(
@@ -64,4 +68,9 @@ export function aiRequest(context: Context): Request | null;
 export function resolveConversation(
   context: Context,
   interpretation?: unknown,
+): Plan;
+export function resolveCalendar(
+  context: Context,
+  plan: Plan,
+  result: unknown,
 ): Plan;
