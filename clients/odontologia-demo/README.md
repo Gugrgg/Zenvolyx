@@ -9,13 +9,37 @@ Foco em novos pacientes: o assistente identifica o tratamento, confirma se é a 
 agenda a avaliação. Quem já é paciente recebe `messages.notQualified` e segue com a recepção.
 Perguntas, regra e mensagens são uma proposta: o dono revisa antes de ativar.
 
-## Em construção
+## Agenda fictícia (T040)
 
-A config já passa no validador, mas a demo ainda precisa destas partes:
+A agenda separada **Clínica Sorriso Demo | Agenda fictícia** foi criada na conta Google do dono,
+em `America/Sao_Paulo`. O ID está em `config.json`; ela não é pública. A config oferece blocos de
+60 minutos com pelo menos 2 horas de antecedência, até 14 dias à frente: segunda a sexta das 9h
+às 12h e das 13h às 18h, sábado das 9h às 12h. O intervalo das 12h às 13h não é ofertado.
+`serviceQuestion: "procedure"` coloca o tratamento escolhido no título da reserva.
 
-| Tarefa | O que entra |
-|--------|-------------|
-| T040 | `calendar` e `scheduling`, com `serviceQuestion: "procedure"` para o evento levar o tratamento, e a agenda de demonstração com compromissos fictícios. |
+Para mostrar horários ocupados, há dois eventos **sem paciente real**, marcados como **Ocupado**,
+sem convidados nem notificações: segunda-feira das 10h às 11h, a partir de 26/10/2026, e
+quinta-feira das 14h às 15h, a partir de 22/10/2026. Cada série tem 13 ocorrências semanais;
+renovar os bloqueios se a demo ocorrer depois desse período. Não mover esses eventos para a
+agenda pessoal do dono.
+
+### Ocupação ao vivo (cenário 4)
+
+1. No celular, avançar com um lead inteiramente fictício até aparecer a lista de horários.
+2. Escolher uma opção livre **futura** da lista, dentro do expediente. Anotar dia e hora no fuso
+   de São Paulo, sem selecionar a opção ainda.
+3. No Google Agenda do dono, abrir **Clínica Sorriso Demo | Agenda fictícia** e criar um evento
+   de teste exatamente nesse intervalo de 60 minutos, sem convidados, com **Mostrar como:
+   Ocupado**. Salvar e conferir que aparece na agenda.
+4. Só então selecionar no celular a opção antiga. O conector deve retornar `slot_taken`; a conversa
+   deve enviar `messages.slotTaken` e uma lista nova sem o horário ocupado. Selecionar outro horário
+   livre e conferir a confirmação e o evento criado na agenda.
+5. Depois da demonstração, remover apenas o evento temporário do passo 3. Não apagar uma reserva
+   criada pela automação para simular outra tentativa.
+
+Este roteiro depende da Calendar API, da credencial com escopo de agenda e do compartilhamento
+com a conta de serviço. Esses acessos reais são verificados na T030; os testes de configuração não
+comprovam as permissões do Google.
 
 ## Conectores
 
@@ -26,7 +50,8 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
   Não usar dados de pacientes reais.
 
 - CRM: `google-sheets`, com a planilha `Leads` da demo compartilhada com a conta de serviço (T021).
-- Agenda: `google-calendar`, com a agenda de demonstração compartilhada com a conta de serviço (T040).
+- Agenda: `google-calendar`, com agenda de demonstração criada na T040. Compartilhamento com a
+  conta de serviço e teste do conector real permanecem para a T030.
 - WhatsApp: número de teste da Meta, com a porta criada à mão com o token da Zenvolyx
   ([passo a passo](../../integrations/whatsapp/client-gateway/README.md)).
 
@@ -35,7 +60,7 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 - [ ] textos, regra e base revisados pelo dono
 - [ ] `ai.enabled: true` somente durante o ensaio com pacientes inteiramente fictícios
 - [ ] porta do WhatsApp criada e `gatewayWorkflowId` preenchido
-- [ ] `phoneNumberId`, `spreadsheetId` e `calendarId` preenchidos no lugar de `PREENCHER`
+- [ ] `phoneNumberId` e `spreadsheetId` preenchidos no lugar de `PREENCHER`; `calendarId` já foi preenchido na T040
 - [ ] planilha e agenda compartilhadas com a conta de serviço
 - [ ] `npm test` passando
 - [ ] `active: true` e commit; a Zenvolyx fica inativa, porque as duas usariam o mesmo número de teste

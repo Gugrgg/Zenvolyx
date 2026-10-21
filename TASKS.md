@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
-  Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
 - [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
   Depende: T029 | Sugerido: CODEX | Ref: docs/arquitetura/demo-cenarios.md
 - [ ] T030 Testar a demo odontológica de ponta a ponta com o dono: todos os cenários no celular dele, com a IA de verdade, e o resultado na validação desta tarefa
@@ -111,6 +109,10 @@ podem começar antes de a demo ficar pronta.
 Nenhuma.
 
 ## Concluído
+
+- [x] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
+  Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
+  Validação: 600 testes, lint, tipos, 11 workflows e 3 configs passaram. O cálculo de horários com a config real da clínica omitiu dois bloqueios simulados e respeitou sábado/intervalo. Agenda Google separada criada e dois eventos fictícios semanais de 13 ocorrências confirmados visualmente; roteiro do `slot_taken` documentado. Acesso real do conector segue para T030: n8n desligado e conta de serviço ainda não configurada.
 
 - [x] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
   Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
@@ -269,26 +271,10 @@ Observações:
 - Automatizar os cenários de docs/arquitetura/demo-cenarios.md com IA, CRM e agenda simulados. Aproveitar núcleo puro e fixtures existentes; testes já conferem que o JS embutido corresponde ao arquivo fonte. N8n Code usa cópia JSON, pois structuredClone não está disponível neste ambiente.
 - lead_conversation_turns ordena rajadas do mesmo lead; espera até 10 min e libera a reserva nas saídas tratadas. Reserva interrompida expira após 30 min; reinício pode perder mensagens em processamento. Concorrência entre leads distintos permanece T044; remarcação/cancelamento, T043.
 - CRM crmUpsertRouter1, WhatsApp whatsappCloudApi, IA aiGeminiDemo0001 e agenda calendarRouter01 via Execute Workflow/Database/each. Não enviar texto bruto ao CRM nem datas inventadas pela IA à agenda. Logs sem dados pessoais; avisos à equipe seguem T027.
-- T040 pendente: clínica inativa e IA desligada até a T030. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
+- T040 configurou agenda fictícia; clínica inativa e IA desligada até a T030. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
 - Publicar pelo editor após reimportar (T045); conferir conteúdo com export:workflow --published, não apenas IDs de versão. CLI com N8N_RUNNERS_BROKER_PORT=5690; ensaiar tabelas por webhook/Execute Workflow.
 - Scripts de ensaio em %TEMP%/zenvolyx-t029/: runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios; não importar essas variantes na instância principal. Regressão anterior em %TEMP%/zenvolyx-t028/.
 - Permissões reais do CRM/agenda e envio pelo número Meta permanecem para T030. Testes simulados não substituem essa validação.
-
-### Handoff T022
-Concluído:
-- `calendarRouter01`: valida `listSlots`/`book`, calcula horários e repete uma vez as falhas transitórias; `googleCalendar01`: consulta ocupação e cria eventos pela conta de serviço (D018/D029).
-- Cálculo puro em `slots.js`, embutido no Code node e conferido por teste; fixtures de almoço, ocupação, antecedência e horário tomado. IDs estáveis recuperam reservas após resposta perdida ou HTTP 409, conferindo identidade e intervalo.
-- Fluxos importados, publicados e exportados do n8n local; exports versionados sem credenciais. Os quatro nós HTTP locais usam `Google (conta de serviço)` (`googleServiceAcc`). Nenhuma chave ou escopo da credencial foi alterado.
-Arquivos principais:
-- integrations/calendar/router/README.md e workflow.json; integrations/calendar/router/slots.js
-- integrations/calendar/google-calendar/README.md e workflow.json
-- tests/calendar.test.ts; tests/fixtures/calendar/
-Próxima tarefa: T040
-Observações:
-- T040/T030: ativar Calendar API, acrescentar o escopo `https://www.googleapis.com/auth/calendar` preservando o de Sheets e compartilhar a agenda fictícia com a conta de serviço. Seguir o README do conector; a API simulada não valida permissões reais do Google.
-- Horários UTC, rótulos no fuso do cliente, limite de 10; omitir horários ambíguos/inexistentes em DST. `slot_taken` pede nova listagem; `event_conflict` exige equipe. O roteador já repetiu falhas transitórias e registrou somente código/clientId; T027 acrescenta o aviso.
-- Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
-- Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
 ### Handoff T038
 Concluído:
@@ -297,19 +283,21 @@ Concluído:
 - Config e documentação validadas; cliente e IA permanecem inativos para evitar chamadas com pacientes reais.
 Arquivos principais:
 - clients/odontologia-demo/config.json; clients/odontologia-demo/README.md
-Próximas tarefas: T040 e T030
+Próxima tarefa: T030
 Observações:
-- Na T040, fazer a agenda concordar com o expediente fictício: segunda a sexta, 9h–18h; sábado, 9h–12h. Horários ofertados dependem da agenda, não apenas do expediente. Endereço “Rua Exemplo, 100, Centro, Cidade Exemplo (SP)” é fictício e não recebe pacientes.
+- A agenda da T040 segue o expediente fictício: segunda a sexta, 9h–18h, com pausa nas avaliações das 12h às 13h; sábado, 9h–12h. Horários ofertados dependem da agenda, não apenas do expediente. Endereço “Rua Exemplo, 100, Centro, Cidade Exemplo (SP)” é fictício e não recebe pacientes.
 - Na T030, revisar os textos com o dono e habilitar `ai.enabled` somente para ensaio com mensagens inteiramente fictícias; a avaliação e os acessos reais ainda dependem dos preparativos da demo.
 
-### Handoff T037
+### Handoff T040
 Concluído:
-- cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo), inativo, com tratamentos, primeira consulta, regra de novos pacientes e mensagens
-- regras de saúde (D026) e cenários da demo documentados na T036
+- Agenda Google separada e privada criada na conta do dono; ID salvo em `calendar.settings.calendarId`.
+- `scheduling`: avaliações de 60 min, antecedência de 2 h, horizonte de 14 dias, serviço da pergunta `procedure`, dias úteis 9h–12h/13h–18h e sábado 9h–12h.
+- Eventos fictícios ocupados: segunda 10h–11h a partir de 26/10/2026 e quinta 14h–15h a partir de 22/10/2026, 13 ocorrências semanais cada. Roteiro para ocupar um horário escolhido ao vivo em `clients/odontologia-demo/README.md`.
 Arquivos principais:
 - clients/odontologia-demo/config.json
-- docs/arquitetura/demo-cenarios.md
-Próxima tarefa: T040
+- clients/odontologia-demo/README.md
+Próxima tarefa: T030
 Observações:
-- T040 completa a config da clínica com agenda fictícia; o README dela diz o que falta.
-- A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).
+- Conector real ainda não testado contra a agenda. N8n estava desligado na T040; a conta de serviço ainda não foi preenchida. T030: ativar Calendar API, adicionar escopo `https://www.googleapis.com/auth/calendar` preservando Sheets, compartilhar apenas esta agenda com a conta de serviço com permissão de alterar eventos e ensaiar listagem/book com dados fictícios.
+- `active` e `ai.enabled` permanecem false. O ID da agenda é público como identificador; nenhum segredo ou link iCal secreto foi salvo.
+- As 13 ocorrências terminam em janeiro de 2027; renovar os bloqueios se a demo atrasar. O cenário ao vivo usa um evento temporário novo, não um dos bloqueios recorrentes.

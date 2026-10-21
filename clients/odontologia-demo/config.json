@@ -12,6 +12,26 @@
     "provider": "google-sheets",
     "settings": { "spreadsheetId": "PREENCHER" }
   },
+  "calendar": {
+    "provider": "google-calendar",
+    "settings": {
+      "calendarId": "782d0fb442e20bdde5661b23bd65edcf122f285c27bd136540e23aaefc37bbc2@group.calendar.google.com"
+    }
+  },
+  "scheduling": {
+    "durationMinutes": 60,
+    "minNoticeHours": 2,
+    "daysAhead": 14,
+    "serviceQuestion": "procedure",
+    "hours": {
+      "mon": ["09:00-12:00", "13:00-18:00"],
+      "tue": ["09:00-12:00", "13:00-18:00"],
+      "wed": ["09:00-12:00", "13:00-18:00"],
+      "thu": ["09:00-12:00", "13:00-18:00"],
+      "fri": ["09:00-12:00", "13:00-18:00"],
+      "sat": ["09:00-12:00"]
+    }
+  },
   "qualification": {
     "questions": [
       {
