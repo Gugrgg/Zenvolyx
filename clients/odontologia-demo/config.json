@@ -52,5 +52,34 @@
     "booked": "Pronto! Sua avaliação ficou marcada para {slot}. Se precisar remarcar, é só chamar por aqui.",
     "stopped": "Tudo bem, não enviaremos mais mensagens. Se precisar, é só chamar."
   },
-  "ai": { "enabled": false, "dataMode": "synthetic", "knowledge": [] }
+  "ai": {
+    "enabled": false,
+    "dataMode": "synthetic",
+    "knowledge": [
+      {
+        "topic": "Endereço",
+        "text": "Para esta demonstração, a clínica fica na Rua Exemplo, 100, Centro, Cidade Exemplo (SP). Este endereço é fictício e não recebe pacientes."
+      },
+      {
+        "topic": "Funcionamento",
+        "text": "Na demonstração, o atendimento funciona de segunda a sexta, das 9h às 18h, e aos sábados, das 9h às 12h. As avaliações são agendadas conforme os horários disponíveis na agenda; não confirme disponibilidade apenas com base no expediente."
+      },
+      {
+        "topic": "Tratamentos oferecidos",
+        "text": "A clínica fictícia oferece avaliação odontológica, implantes, ortodontia, alinhadores, clareamento e limpeza. O profissional avalia cada caso presencialmente e indica o que for apropriado; o atendimento pelo WhatsApp não define tratamento nem promete resultado."
+      },
+      {
+        "topic": "Formas de pagamento",
+        "text": "Somente se a pessoa perguntar: na demonstração, a clínica aceita Pix, cartão de débito e cartão de crédito. Não mencionar parcelamento, descontos ou condições especiais."
+      },
+      {
+        "topic": "Como funciona a avaliação",
+        "text": "A avaliação é presencial e agendada. O dentista conversa com a pessoa sobre o motivo da visita e avalia o caso para explicar os próximos passos. Para o cadastro presencial, levar documento com foto; não pedir foto ou número do documento pelo WhatsApp. Duração e profissional específico devem ser confirmados pela recepção."
+      },
+      {
+        "topic": "Política de preços",
+        "text": "Se perguntarem o preço de um tratamento, explicar que o valor depende da avaliação presencial e do plano definido pelo dentista. Não informar preço, faixa, valor inicial, desconto ou gratuidade de tratamentos. O valor da avaliação, se perguntado, deve ser confirmado pela recepção; não afirmar que ela é gratuita. Convidar para agendar a avaliação sem tom de oferta."
+      }
+    ]
+  }
 }

@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
-  Depende: T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
 - [ ] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
   Depende: T022, T037 | Sugerido: CLAUDE | Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
 - [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
@@ -113,6 +111,10 @@ podem começar antes de a demo ficar pronta.
 Nenhuma.
 
 ## Concluído
+
+- [x] T038 Criar a base administrativa da clínica fictícia (seção `ai` de `clients/odontologia-demo/`): endereço, funcionamento, tratamentos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento nem tom de oferta
+  Ref: clients/odontologia-demo/README.md, docs/arquitetura/ia.md (Regras de saúde)
+  Validação: 600 testes, lint, tipos e 3 configs passaram. Seis tópicos fictícios, 1.596 caracteres de base (limite 6.000); sem preço de tratamento ou promessa clínica. Cliente e IA permanecem inativos até a T030.
 
 - [x] T029 Acrescentar o agendamento à conversa: lista de horários, marcação, horário ocupado (`messages.slotTaken`), confirmação e CRM `scheduled`
   Ref: automations/lead-conversation/README.md; tests/conversation-scheduling.test.ts
@@ -267,7 +269,7 @@ Observações:
 - Automatizar os cenários de docs/arquitetura/demo-cenarios.md com IA, CRM e agenda simulados. Aproveitar núcleo puro e fixtures existentes; testes já conferem que o JS embutido corresponde ao arquivo fonte. N8n Code usa cópia JSON, pois structuredClone não está disponível neste ambiente.
 - lead_conversation_turns ordena rajadas do mesmo lead; espera até 10 min e libera a reserva nas saídas tratadas. Reserva interrompida expira após 30 min; reinício pode perder mensagens em processamento. Concorrência entre leads distintos permanece T044; remarcação/cancelamento, T043.
 - CRM crmUpsertRouter1, WhatsApp whatsappCloudApi, IA aiGeminiDemo0001 e agenda calendarRouter01 via Execute Workflow/Database/each. Não enviar texto bruto ao CRM nem datas inventadas pela IA à agenda. Logs sem dados pessoais; avisos à equipe seguem T027.
-- T038/T040 pendentes: clínica inativa e IA desligada. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
+- T040 pendente: clínica inativa e IA desligada até a T030. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
 - Publicar pelo editor após reimportar (T045); conferir conteúdo com export:workflow --published, não apenas IDs de versão. CLI com N8N_RUNNERS_BROKER_PORT=5690; ensaiar tabelas por webhook/Execute Workflow.
 - Scripts de ensaio em %TEMP%/zenvolyx-t029/: runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios; não importar essas variantes na instância principal. Regressão anterior em %TEMP%/zenvolyx-t028/.
 - Permissões reais do CRM/agenda e envio pelo número Meta permanecem para T030. Testes simulados não substituem essa validação.
@@ -288,6 +290,18 @@ Observações:
 - Disponibilidade e criação são chamadas separadas: concorrência entre leads diferentes ou edição humana ainda pode sobrepor eventos (T044). Repetir o mesmo pedido não cria outro evento.
 - Validação no n8n: 15 cenários numa instância Docker descartável com API fictícia em loopback; nenhuma chamada ao Google nem dado real. O ambiente temporário foi removido após o teste.
 
+### Handoff T038
+Concluído:
+- Seis tópicos administrativos fictícios em `ai.knowledge`: endereço, expediente, tratamentos, formas de pagamento, avaliação e política de preços.
+- Sem preço de tratamento, diagnóstico ou promessa de resultado; pagamento somente quando perguntado. A avaliação tem valor a confirmar pela recepção.
+- Config e documentação validadas; cliente e IA permanecem inativos para evitar chamadas com pacientes reais.
+Arquivos principais:
+- clients/odontologia-demo/config.json; clients/odontologia-demo/README.md
+Próximas tarefas: T040 e T030
+Observações:
+- Na T040, fazer a agenda concordar com o expediente fictício: segunda a sexta, 9h–18h; sábado, 9h–12h. Horários ofertados dependem da agenda, não apenas do expediente. Endereço “Rua Exemplo, 100, Centro, Cidade Exemplo (SP)” é fictício e não recebe pacientes.
+- Na T030, revisar os textos com o dono e habilitar `ai.enabled` somente para ensaio com mensagens inteiramente fictícias; a avaliação e os acessos reais ainda dependem dos preparativos da demo.
+
 ### Handoff T037
 Concluído:
 - cliente fictício `clients/odontologia-demo/` (Clínica Sorriso Demo), inativo, com tratamentos, primeira consulta, regra de novos pacientes e mensagens
@@ -295,7 +309,7 @@ Concluído:
 Arquivos principais:
 - clients/odontologia-demo/config.json
 - docs/arquitetura/demo-cenarios.md
-Próximas tarefas: T038 e T040
+Próxima tarefa: T040
 Observações:
-- T038 e T040 (Claude) completam a config da clínica; o README dela diz o que falta em cada uma.
+- T040 completa a config da clínica com agenda fictícia; o README dela diz o que falta.
 - A regra qualifica só `patient: new`; quem já é paciente recebe `notQualified` (cenário 12).

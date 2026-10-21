@@ -15,13 +15,15 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 
 | Tarefa | O que entra |
 |--------|-------------|
-| T038 | Base administrativa em `ai`: endereço, funcionamento, tratamentos oferecidos, formas de pagamento, como é a avaliação e política de preços, sem preço de tratamento. |
 | T040 | `calendar` e `scheduling`, com `serviceQuestion: "procedure"` para o evento levar o tratamento, e a agenda de demonstração com compromissos fictícios. |
 
 ## Conectores
 
 - IA da demo: [Gemini gratuito](../../integrations/ai/gemini/README.md), somente com
-  mensagens fictícias e `ai.dataMode: "synthetic"` na config (D030/D031). O campo já está preenchido, mas `ai.enabled` permanece `false` até a base administrativa da T038 ficar pronta. Não usar dados de pacientes reais.
+  mensagens fictícias e `ai.dataMode: "synthetic"` na config (D030/D031). A base administrativa
+  foi preenchida na T038 com endereço, expediente, tratamentos, pagamentos, avaliação e política
+  de preços fictícios. `ai.enabled` permanece `false` até o teste de ponta a ponta da T030.
+  Não usar dados de pacientes reais.
 
 - CRM: `google-sheets`, com a planilha `Leads` da demo compartilhada com a conta de serviço (T021).
 - Agenda: `google-calendar`, com a agenda de demonstração compartilhada com a conta de serviço (T040).
@@ -31,6 +33,7 @@ A config já passa no validador, mas a demo ainda precisa destas partes:
 ## Ativação (T030)
 
 - [ ] textos, regra e base revisados pelo dono
+- [ ] `ai.enabled: true` somente durante o ensaio com pacientes inteiramente fictícios
 - [ ] porta do WhatsApp criada e `gatewayWorkflowId` preenchido
 - [ ] `phoneNumberId`, `spreadsheetId` e `calendarId` preenchidos no lugar de `PREENCHER`
 - [ ] planilha e agenda compartilhadas com a conta de serviço
