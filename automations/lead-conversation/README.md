@@ -9,7 +9,7 @@ Ligada à saída **Burst event** da entrada do WhatsApp. Gemini é chamado somen
 com `ai.enabled: true` e `ai.dataMode: "synthetic"` na config versão 3 (D031).
 A indicação não anonimiza texto: usar exclusivamente na demo com dados fictícios.
 Sem ela, o fluxo segue com botões e comandos explícitos, sem chamada de IA nem
-fallback pago. A base administrativa da clínica continua pendente da T038.
+fallback pago. A base administrativa fictícia está na config da clínica (T038).
 
 ## Entrada e estado
 
@@ -99,6 +99,12 @@ e verificar a versão ativa (T045). Não habilitar faturamento para estes testes
 `npm test -- tests/lead-conversation.test.ts tests/conversation-scheduling.test.ts` verifica transições, isolamento,
 regras, fallback, estados encerrados e minimização de dados, sem rede.
 
+`npm test -- tests/demo-scenarios.test.ts` percorre os 12 cenários da demo e três
+variações de urgência, executando os nós Code e as conexões do export com tabelas
+em memória e todos os conectores simulados. Fixtures, cobertura e limites no
+[roteiro de cenários](../../docs/arquitetura/demo-cenarios.md#testes-automáticos-t041).
+Não exige n8n nem chama APIs; não substitui o ensaio real da T030.
+
 Ensaio em n8n 2.40.5 descartável, acessível somente em loopback, com tabelas reais
 e conectores substituídos por respostas fictícias; um workflow chamador usa
 Execute Workflow para exercitar a conversa como sub-workflow:
@@ -162,5 +168,5 @@ interrupção após book, repetir o mesmo pedido usa a identidade estável do
 conector (T022); erro incerto vai para a equipe, sem cancelar nem marcar outro
 horário automaticamente. Reservas entre leads diferentes continuam sujeitas à
 concorrência da T044. Remarcação e cancelamento seguem para equipe até a T043.
-Agenda/config da demo e permissões do Google permanecem na T040/T030; o ensaio
-simulado não confirma esses acessos.
+Agenda/config da demo foram preparadas na T040; permissões do Google e ensaio
+real permanecem na T030. O teste simulado não confirma esses acessos.

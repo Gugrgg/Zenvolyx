@@ -7,7 +7,7 @@ O que a demo precisa cumprir na [clínica fictícia](../../clients/odontologia-d
 Como são usados:
 
 - T024: os casos da IA (3, 7, 8, 9 e 11) conferidos à mão com a IA de verdade.
-- T041: cada cenário vira teste automático do fluxo, com IA, CRM e agenda simulados.
+- T041: cada cenário está coberto por teste automático do fluxo, com IA, CRM e agenda simulados.
 - T030: todos rodados no celular do dono, com a IA de verdade; o resultado vai para a validação da
   T030 no TASKS.md.
 - T042: o roteiro de apresentação escolhe quais o dono mostra.
@@ -22,6 +22,33 @@ Valem em todos os cenários:
 - nada de preço, prazo ou resultado fora da base, nem diagnóstico, tratamento ou remédio (D026);
 - o texto do paciente não vai para a planilha, a agenda, os logs nem os avisos (D013);
 - várias mensagens seguidas recebem uma resposta só (T020).
+
+## Testes automáticos (T041)
+
+Rodar `npm test -- tests/demo-scenarios.test.ts`. Não exige Docker, n8n, credenciais
+nem acesso à rede; não chama APIs nem gera cobrança.
+
+Os 12 casos estão em [demo.json](../../tests/fixtures/scenarios/demo.json).
+Cada passo descreve mensagem ou opção escolhida, resposta simulada da IA e o
+resultado esperado. Os testes usam a config atual da clínica, habilitada apenas
+em memória, com IDs fictícios de WhatsApp, planilha e agenda, e relógio fixo.
+
+O executor de teste percorre as conexões e executa os nós Code do workflow
+exportado da conversa. Tabelas em memória preservam o estado entre mensagens;
+WhatsApp, IA, CRM e agenda são simulados. Verifica perguntas e opções, respostas
+persistidas, etapas do CRM, reserva antes da confirmação, conflito de horário,
+pausas de 24 h (incluindo mensagem aos 23 h 59 min), recusa e ausência de texto
+bruto no estado, CRM, agenda e logs. Três variações adicionais inserem urgência
+junto de um clique em diferentes etapas, inclusive na lista de horários.
+
+Limites: não executa o motor n8n, concorrência, limpeza diária nem o agrupamento
+de mensagens da entrada; as rajadas chegam já agrupadas (T020). Não verifica
+permissões do Google/Meta ou criação de eventos reais. A classificação e o texto
+da IA são respostas prescritas: os casos clínicos e de manipulação verificam o
+fluxo diante dessas respostas, não a segurança ou qualidade do modelo real.
+O ensaio completo com IA e conectores reais permanece na T030; a avaliação
+automática da IA, na T025. O cenário de parada verifica recusa e pausa na conversa;
+não há disparos proativos neste fluxo.
 
 ## 1. Implante
 

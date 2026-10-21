@@ -29,8 +29,6 @@ Tarefas da fase comercial usam `B000`, são do dono e trazem `Apoio:` quando um 
 Em ordem. Claude e Codex trabalham em paralelo quando as dependências deixam
 ([tabela](docs/arquitetura/demo.md#tarefas-até-a-demo)).
 
-- [ ] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
-  Depende: T029 | Sugerido: CODEX | Ref: docs/arquitetura/demo-cenarios.md
 - [ ] T030 Testar a demo odontológica de ponta a ponta com o dono: todos os cenários no celular dele, com a IA de verdade, e o resultado na validação desta tarefa
   Depende: T020, T029, T038, T040, T041 | Sugerido: CLAUDE | Ref: docs/arquitetura/demo.md, docs/arquitetura/demo-cenarios.md
 - [ ] T042 Escrever o roteiro de apresentação da demo para donos de clínica (cerca de 5 minutos): ordem dos cenários, o que mostrar no WhatsApp, na planilha e na agenda, e respostas para dúvidas comuns
@@ -109,6 +107,10 @@ podem começar antes de a demo ficar pronta.
 Nenhuma.
 
 ## Concluído
+
+- [x] T041 Transformar os cenários da demo em testes automáticos do fluxo, com IA, CRM e agenda simulados (fixtures em `tests/fixtures/scenarios/`)
+  Ref: docs/arquitetura/demo-cenarios.md, tests/demo-scenarios.test.ts
+  Validação: 616 testes passaram (16 novos: 12 cenários, três variações de urgência e conferência de cobertura), lint, tipos, 11 workflows e 3 configs. Nós Code e conexões do export exercitados com estado persistido entre turnos em tabelas simuladas; reserva antes da confirmação, slot_taken, CRM, pausas e minimização de dados conferidos. Nenhuma API chamada. Motor n8n, permissões e comportamento da IA real permanecem para T030.
 
 - [x] T040 Criar os horários fictícios da demo: `calendar` e `scheduling` da clínica, agenda de demonstração com compromissos fictícios e passo a passo para ocupar um horário ao vivo (cenário 4)
   Ref: clients/odontologia-demo/README.md, docs/arquitetura/demo-cenarios.md
@@ -256,25 +258,21 @@ Observações:
 - ...
 -->
 
-### Handoff T029
+### Handoff T041
 Concluído:
-- Agendamento em conversation.js/resolveCalendar e workflow leadConversation: opções guardadas, reserva pelo intervalo, serviço da config, CRM scheduled, confirmação, slot_taken, noSlots e encaminhamento. IDs incluem início/fim, nunca índice de lista.
-- Texto livre não reserva; cliques isolados recuperam somente opções guardadas. Rajada com texto adicional passa pela IA e mantém prioridade de urgent/stop/human. Falha de envio preserva appointment. Pausa recebida durante book suprime confirmação, mas conserva reserva no estado e CRM.
-- 600 testes passaram, incluindo 38 de agendamento; lint, tipos, 11 workflows e 3 configs passaram. 48 requisições/12 cenários no n8n descartável mais regressão T028 passaram; nenhuma API real chamada. Instância de teste removida.
-- Publicado pelo editor local em 2026-10-08; conteúdo do export --published conferido contra o código testado. Export sem credenciais.
+- 12 cenários documentados automatizados com config real da demo e recursos fictícios em memória. Três variações de urgência em rajadas, incluindo escolha de horário, e teste de correspondência entre IDs da documentação e fixtures.
+- Executor restrito aos nós/conexões usados no caminho sequencial do export, com tabelas e conectores simulados. Verifica efeitos e ordem, mensagens, estado, CRM, slot_taken, pausa até 23 h 59 min, recusa e privacidade.
+- 616 testes, lint, tipos, 11 workflows e 3 configs passaram. Nenhuma dependência, alteração de workflow/config ou chamada externa; não exige republicação no n8n.
 Arquivos principais:
-- automations/lead-conversation/README.md, conversation.js, conversation.d.ts, workflow.json
-- tests/conversation-scheduling.test.ts; tests/lead-conversation.test.ts
-- tests/fixtures/conversation/scheduling.json; tests/fixtures/conversation/input.json
-Próxima tarefa: T041
+- tests/demo-scenarios.test.ts, tests/scenario-workflow.ts, tests/fixtures/scenarios/demo.json
+- docs/arquitetura/demo-cenarios.md; automations/lead-conversation/README.md
+Próxima tarefa: T030
 Observações:
-- Automatizar os cenários de docs/arquitetura/demo-cenarios.md com IA, CRM e agenda simulados. Aproveitar núcleo puro e fixtures existentes; testes já conferem que o JS embutido corresponde ao arquivo fonte. N8n Code usa cópia JSON, pois structuredClone não está disponível neste ambiente.
-- lead_conversation_turns ordena rajadas do mesmo lead; espera até 10 min e libera a reserva nas saídas tratadas. Reserva interrompida expira após 30 min; reinício pode perder mensagens em processamento. Concorrência entre leads distintos permanece T044; remarcação/cancelamento, T043.
-- CRM crmUpsertRouter1, WhatsApp whatsappCloudApi, IA aiGeminiDemo0001 e agenda calendarRouter01 via Execute Workflow/Database/each. Não enviar texto bruto ao CRM nem datas inventadas pela IA à agenda. Logs sem dados pessoais; avisos à equipe seguem T027.
-- T040 configurou agenda fictícia; clínica inativa e IA desligada até a T030. Gemini apenas com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
-- Publicar pelo editor após reimportar (T045); conferir conteúdo com export:workflow --published, não apenas IDs de versão. CLI com N8N_RUNNERS_BROKER_PORT=5690; ensaiar tabelas por webhook/Execute Workflow.
-- Scripts de ensaio em %TEMP%/zenvolyx-t029/: runtime.mjs, verify.mjs e pause.mjs criam conectores fictícios; não importar essas variantes na instância principal. Regressão anterior em %TEMP%/zenvolyx-t028/.
-- Permissões reais do CRM/agenda e envio pelo número Meta permanecem para T030. Testes simulados não substituem essa validação.
+- Rodar `npm test -- tests/demo-scenarios.test.ts`. Respostas da IA são prescritas: não comprova resistência do Gemini a manipulação nem qualidade clínica. Motor n8n, concorrência, limpeza diária e agrupamento T020 não são executados nesta suíte.
+- Clínica inativa e IA desligada; preservar até o ensaio real. Gemini somente com ai.enabled e dataMode synthetic, usando mensagens inteiramente fictícias; synthetic não anonimiza dados nem comprova plano gratuito. Sem fallback pago.
+- CRM crmUpsertRouter1, WhatsApp whatsappCloudApi, IA aiGeminiDemo0001 e agenda calendarRouter01 via Execute Workflow/Database/each. Conferir permissões reais do CRM/agenda e envio pela Meta com o dono na T030; ver também handoffs T038/T040.
+- Conversa e entrada publicadas pelo editor na T029; se reimportar, publicar pelo editor e conferir conteúdo com export:workflow --published (T045). CLI com N8N_RUNNERS_BROKER_PORT=5690; ensaiar tabelas por webhook/Execute Workflow. N8n Code não oferece structuredClone.
+- Limites mantidos: fila por lead não durável, concorrência entre leads T044, remarcação/cancelamento T043, avisos T027. Detalhes e ensaios de falhas/pausa durante book no README da conversa. Scripts antigos em %TEMP%/zenvolyx-t029/ usam conectores fictícios; não importar na instância principal.
 
 ### Handoff T038
 Concluído:
